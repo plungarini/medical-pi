@@ -1,0 +1,36 @@
+Analyze this medical conversation and extract any new medical information that should be added to the patient's profile.
+
+Conversation:
+{EXCHANGE}
+
+Current Profile Summary:
+{PROFILE_SUMMARY}
+
+Instructions:
+1. Identify any new medical conditions, medications, allergies, vital readings, lab results, surgeries, or family history mentioned
+2. Check if the information is already in the profile (avoid duplicates)
+3. Return a ProfileDiff JSON object
+
+ProfileDiff Schema:
+{
+  "hasNewInfo": boolean,  // true if any new information was found
+  "patches": [
+    {
+      "field": string,      // one of: demographics, currentConditions, persistentConditions, pastConditions, medications, allergies, vitals, labResults, surgeries, familyHistory, lifestyle, freeNotes
+      "operation": "add" | "update" | "remove",
+      "value": any,         // the new value - must include an "id" field (generate UUID) for array items
+      "confidence": number  // 0.0 to 1.0 indicating confidence in this extraction
+    }
+  ]
+}
+
+Examples:
+- "I started taking Lisinopril 10mg daily" → add to medications
+- "My blood pressure was 140/90 at the doctor" → add to vitals
+- "I had my appendix removed in 2015" → add to surgeries
+
+Important:
+- Only extract factual medical information
+- Set confidence < 0.7 if the information is unclear or inferred
+- Generate UUIDs for new array items
+- Never remove items unless explicitly stated
