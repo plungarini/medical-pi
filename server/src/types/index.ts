@@ -51,6 +51,7 @@ export interface Condition {
   resolvedAt?: string;
   severity?: string;
   notes?: string;
+  recordedAt?: string; // Standard metadata
   source: ProfileSource;
   confidence?: number;
 }
@@ -62,6 +63,7 @@ export interface Medication {
   frequency?: string;
   startedAt?: string;
   notes?: string;
+  recordedAt?: string; // Standard metadata
   source: ProfileSource;
 }
 
@@ -70,6 +72,8 @@ export interface Allergy {
   substance: string;
   reaction?: string;
   severity?: string;
+  notes?: string; // Added notes
+  recordedAt?: string; // Standard metadata
   source: ProfileSource;
 }
 
@@ -87,7 +91,8 @@ export interface LabResult {
   value: string;
   unit?: string;
   referenceRange?: string;
-  recordedAt: string;
+  recordedAt: string; // Already exists, but kept for consistency
+  notes?: string; // Added notes
   source: ProfileSource;
 }
 
@@ -96,6 +101,7 @@ export interface Surgery {
   name: string;
   date?: string;
   notes?: string;
+  recordedAt?: string; // Standard metadata
   source: ProfileSource;
 }
 
@@ -104,6 +110,7 @@ export interface FamilyCondition {
   relation: string;
   condition: string;
   notes?: string;
+  recordedAt?: string; // Standard metadata
   source: ProfileSource;
 }
 
@@ -152,10 +159,12 @@ export type ProfileField =
   | "freeNotes";
 
 export interface ProfilePatch {
-  field: ProfileField | string; // Allow string for flexibility from LLM
+  field: string;
   operation: "add" | "update" | "remove";
   value: unknown;
   confidence: number;
+  notes: string;
+  recordedAt?: string;
 }
 
 export interface ProfileDiff {

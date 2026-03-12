@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { queries, generateId, now } from "../core/db.js";
 import { jsonCompletion } from "../core/openrouterClient.js";
-import { zodResponseFormat } from "openai/helpers/zod";
 import { logger } from "../core/logger.js";
 import type { MedicalProfile, ProfileDiff, ProfileHistoryEntry } from "../types/index.js";
 import fs from "node:fs";
@@ -27,6 +26,8 @@ export const ProfileDiffSchema = z.object({
       operation: z.enum(["add", "update", "remove"]),
       value: z.unknown(),
       confidence: z.number().min(0).max(1),
+      notes: z.string(),
+      recordedAt: z.string().optional(),
     })
   ),
 });
@@ -97,6 +98,38 @@ export function getProfileHistory(userId: string, limit = 50): ProfileHistoryEnt
   }));
 }
 
+export function updateProfileEntry(
+  userId: string,
+  field: string,
+  entryId: string,
+  updates: any
+): void {
+  const profile = getProfile(userId);
+  if (!profile) {
+    throw new Error(`Profile not found for user ${userId}`);
+  }
+
+  const fieldKey = field as keyof MedicalProfile;
+  const currentValue = profile[fieldKey];
+
+  if (Array.isArray(currentValue)) {
+    const updatedArray = currentValue.map((item: any) => {
+      if (item.id === entryId) {
+        return { ...item, ...updates, updatedAt: now() };
+      }
+      return item;
+    });
+    updateProfile(userId, { [fieldKey]: updatedArray } as Partial<MedicalProfile>);
+  } else if (currentValue && typeof currentValue === "object") {
+    // Handle objects (like lifestyle or demographics)
+    const updatedObject = {
+      ...currentValue,
+      [entryId]: updates.notes || updates // Use notes if present (from UI dialog), otherwise updates
+    };
+    updateProfile(userId, { [fieldKey]: updatedObject } as Partial<MedicalProfile>);
+  }
+}
+
 export function deleteProfileEntry(
   userId: string,
   field: string,
@@ -111,8 +144,13 @@ export function deleteProfileEntry(
   const currentValue = profile[fieldKey];
 
   if (Array.isArray(currentValue)) {
-    const filtered = currentValue.filter((item: { id: string }) => item.id !== entryId);
+    const filtered = currentValue.filter((item: any) => item.id !== entryId);
     updateProfile(userId, { [fieldKey]: filtered } as Partial<MedicalProfile>);
+  } else if (currentValue && typeof currentValue === "object") {
+    // Handle objects: remove the key
+    const updatedObject = { ...currentValue };
+    delete (updatedObject as any)[entryId];
+    updateProfile(userId, { [fieldKey]: updatedObject } as Partial<MedicalProfile>);
   }
 }
 
@@ -120,15 +158,16 @@ export async function breathe(
   userId: string,
   userMessage: string,
   assistantContent: string
-): Promise<{ fields: string[]; flagged: boolean } | null> {
+): Promise<void> {
+  // Fire-and-forget: catch all errors and log them
   try {
     const profile = getProfile(userId);
     if (!profile) {
       logger.warn(`Profile not found for breathe: ${userId}`);
-      return null;
+      return;
     }
 
-    // Build profile summary (top-level fields only to save tokens)
+    // Build profile summary (top-level fields for context)
     const profileSummary = {
       demographics: profile.demographics,
       currentConditions: profile.currentConditions.map((c) => c.name),
@@ -139,47 +178,29 @@ export async function breathe(
       lifestyle: profile.lifestyle,
     };
 
-    const prompt = PROFILE_EXTRACTOR_PROMPT.replace(
-      "{EXCHANGE}",
-      JSON.stringify({ user: userMessage, assistant: assistantContent })
-    ).replace("{PROFILE_SUMMARY}", JSON.stringify(profileSummary));
+    const prompt = PROFILE_EXTRACTOR_PROMPT
+      .replace("{profileSummary}", JSON.stringify(profileSummary))
+      .replace("{exchange}", JSON.stringify({ user: userMessage, assistant: assistantContent }))
+      .replace("{currentTime}", now());
 
-    // Use jsonCompletion to enforce response_format: json_object, preventing markdown code fences
+    // Enforce JSON format using OpenRouter jsonCompletion
     const response = await jsonCompletion<ProfileDiff>(
-      [
-        { role: "system", content: prompt },
-        {
-          role: "user",
-          content:
-            "Extract any new medical information from this conversation. Return valid JSON only.",
-        },
-      ],
-      zodResponseFormat(ProfileDiffSchema, "ProfileDiff"),
-      { temperature: 0.3 },
+      [{ role: "user", content: prompt }],
+      null, // Allow default json_object mode
+      { temperature: 0.1, maxTokens: 2048 }
     );
 
-    // Validate response with Zod
-    let diff: ProfileDiff;
-    try {
-      const parsed = ProfileDiffSchema.parse(response);
-      diff = {
-        hasNewInfo: parsed.hasNewInfo,
-        patches: parsed.patches.map((p) => ({
-          field: p.field,
-          operation: p.operation,
-          value: p.value,
-          confidence: p.confidence,
-        })),
-      };
-    } catch (error) {
-      const errMsg = error instanceof Error ? error.message : String(error);
-      logger.warn(`Profile diff schema validation failed: ${errMsg}`);
-      return null;
+    // Validate with Zod
+    const validation = ProfileDiffSchema.safeParse(response);
+    if (!validation.success) {
+      logger.warn(`breathe: Profile diff validation failed for user ${userId}`, validation.error);
+      return;
     }
+    const diff = validation.data;
 
-    if (!diff.hasNewInfo || diff.patches.length === 0) {
-      logger.debug("No new profile information detected");
-      return null;
+    if (!diff.hasNewInfo || !diff.patches || diff.patches.length === 0) {
+      logger.debug(`breathe: no new info for user ${userId}`);
+      return;
     }
 
     // Apply patches
@@ -188,67 +209,65 @@ export async function breathe(
     let flagged = false;
 
     for (const patch of diff.patches) {
-      // Check confidence threshold
       if (patch.confidence < PROFILE_MIN_CONFIDENCE) {
         flagged = true;
       }
 
-      const field = patch.field as keyof MedicalProfile;
+      const field = patch.field as keyof Omit<MedicalProfile, 'userId' | 'updatedAt'>;
       const currentValue = updatedProfile[field];
 
       if (patch.operation === "add" && Array.isArray(currentValue)) {
         const newItem = {
-          ...((patch.value || {}) as Record<string, unknown>),
+          ...(patch.value as Record<string, unknown>),
           id: generateId(),
           source: "auto",
           confidence: patch.confidence,
+          notes: patch.notes,
+          recordedAt: patch.recordedAt || now(), // Default to current time if AI omits it
         };
         (updatedProfile[field] as unknown[]) = [...currentValue, newItem];
         updatedFields.push(field);
       } else if (patch.operation === "update" && Array.isArray(currentValue)) {
-        const itemId = (patch.value as { id: string }).id;
-        const itemIndex = currentValue.findIndex((item: { id: string }) => item.id === itemId);
+        const value = patch.value as { id: string };
+        const itemIndex = currentValue.findIndex((item: any) => item.id === value.id);
         if (itemIndex >= 0) {
           const updatedArray = [...currentValue];
-          const currentItem = currentValue[itemIndex];
-          if (currentItem && typeof currentItem === "object") {
-            updatedArray[itemIndex] = {
-              ...currentItem,
-              ...(patch.value as Record<string, unknown>),
-            };
-          }
+          updatedArray[itemIndex] = {
+            ...updatedArray[itemIndex],
+            ...value,
+          };
           (updatedProfile[field] as unknown[]) = updatedArray;
           updatedFields.push(field);
         }
       } else if (patch.operation === "remove" && Array.isArray(currentValue)) {
-        const itemId = patch.value as string;
+        const itemId = (patch.value as { id: string }).id;
         (updatedProfile[field] as unknown[]) = currentValue.filter(
-          (item: { id: string }) => item.id !== itemId
+          (item: any) => item.id !== itemId
         );
         updatedFields.push(field);
       } else if (patch.operation === "add" || patch.operation === "update") {
-        // Handle non-array fields (demographics, lifestyle, freeNotes)
+        // Handle non-array fields
         (updatedProfile[field] as unknown) = patch.value;
         updatedFields.push(field);
       }
     }
 
-    if (updatedFields.length === 0) {
-      return null;
-    }
+    if (updatedFields.length === 0) return;
 
-    // Save updated profile
+    // Save update
     updatedProfile.updatedAt = now();
     queries.updateProfile.run([JSON.stringify(updatedProfile), updatedProfile.updatedAt, userId]);
 
-    // Save to history
+    // Save history
     queries.addProfileHistory.run([generateId(), userId, JSON.stringify(diff), now()]);
 
-    logger.info(`Profile updated for user ${userId}`, { fields: updatedFields, flagged });
+    logger.info(`breathe: profile updated for ${userId}`, { updatedFields, flagged });
 
-    return { fields: updatedFields, flagged };
+    // Emit live event
+    const { emitLiveEvent } = await import("./eventService.js");
+    emitLiveEvent(userId, "profile_updated", { fields: updatedFields, flagged });
+
   } catch (error) {
-    logger.error("Error in breathe function", error);
-    return null;
+    logger.error(`breathe failed for user ${userId}`, error);
   }
 }

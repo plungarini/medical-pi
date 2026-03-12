@@ -1,6 +1,40 @@
 import { logger } from "../core/logger.js";
 import { completion } from "../core/openrouterClient.js";
-import { prepare, queries, now } from "../core/db.js";
+import { prepare, queries } from "../core/db.js";
+import { updateSession } from "./sessionService.js";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PROMPTS_DIR = path.join(__dirname, "../../../prompts");
+
+export async function generateAndSave(sessionId: string): Promise<void> {
+  const session = queries.getSessionById.get([sessionId]) as any;
+  if (!session) return;
+  if (session.title && session.title.trim() !== "" && session.title !== "New Chat") return;
+
+  const messages = queries.getMessagesBySessionAsc.all([sessionId, 2]) as any[];
+  if (messages.length < 2) return;
+
+  try {
+    const promptTemplate = fs.readFileSync(path.join(PROMPTS_DIR, "session-title.txt"), "utf-8");
+    const exchange = messages.map(m => `${m.role}: ${m.content}`).join("\n");
+    const prompt = promptTemplate.replace("{EXCHANGE}", exchange);
+
+    const title = await completion([
+      { role: "user", content: prompt }
+    ], { maxTokens: 32, temperature: 0.3 });
+
+    const finalTitle = title.trim().replace(/^["']|["']$/g, "");
+    if (finalTitle) {
+      updateSession(sessionId, { title: finalTitle });
+      logger.info(`Generated and saved title for session ${sessionId}: ${finalTitle}`);
+    }
+  } catch (error) {
+    logger.error(`Failed to generate title for session ${sessionId}`, error);
+  }
+}
 
 export async function generateSessionTitle(
   userMessage: string,
@@ -44,7 +78,7 @@ export async function repairEmptyTitles(): Promise<number> {
     for (const row of rows) {
       try {
         const title = await generateSessionTitle(row.first_message, "");
-        queries.updateSession.run([title, null, now(), row.id]);
+        updateSession(row.id, { title });
         repaired++;
       } catch (error) {
         logger.error(`Failed to repair title for session ${row.id}`, error);

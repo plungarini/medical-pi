@@ -132,6 +132,12 @@ export const profileApi = {
 
   deleteEntry: (field: string, id: string): Promise<void> =>
     apiRequest(`/profile/entry/${field}/${id}`, { method: "DELETE" }),
+
+  updateEntry: (field: string, id: string, data: any): Promise<void> =>
+    apiRequest(`/profile/entry/${field}/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
 };
 
 // Documents API

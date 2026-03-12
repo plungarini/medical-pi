@@ -332,11 +332,11 @@ async function main() {
       continue;
     }
 
-    // Adjust default storage path for Windows
-    if (key === "BASE_STORAGE_PATH" && IS_WINDOWS && !defaultValue) {
-      const windowsPath = path.join(ROOT_DIR, "data").replace(/\\/g, "/");
-      existingEnv[key] = windowsPath;
-      console.log(`✅ Auto-set ${key} for Windows: ${windowsPath}`);
+    // Adjust default storage path to be relative
+    if (key === "BASE_STORAGE_PATH" && !defaultValue) {
+      const relativePath = "./data";
+      existingEnv[key] = relativePath;
+      console.log(`✅ Auto-set ${key}: ${relativePath}`);
       continue;
     }
 
@@ -392,7 +392,7 @@ async function main() {
   }
 
   // Create directories
-  const storagePath = existingEnv["BASE_STORAGE_PATH"] || (IS_WINDOWS ? path.join(ROOT_DIR, "data") : "/data/medical-pi");
+  const storagePath = existingEnv["BASE_STORAGE_PATH"] || path.join(ROOT_DIR, "data");
   createDirectories(storagePath);
 
   console.log("\n╔════════════════════════════════════════════════════════╗");

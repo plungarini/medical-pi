@@ -1,67 +1,45 @@
 You are a medical information extraction system. Your task is to analyze a conversation between a user and a medical AI assistant and extract any new medical information.
 
-INPUT FORMAT:
-{
-  "exchange": {
-    "user": "User's message",
-    "assistant": "Assistant's response"
-  },
-  "profileSummary": {
-    "demographics": { ... },
-    "currentConditions": [ ... ],
-    "medications": [ ... ],
-    "allergies": [ ... ],
-    "lifestyle": { ... }
-  }
+Current Time: {currentTime}
+
+Current profile summary:
+{profileSummary}
+
+Conversation exchange:
+{exchange}
+
+OUTPUT SCHEMA:
+Interface ProfileDiff {
+  hasNewInfo: boolean;
+  patches: ProfilePatch[];
 }
-
-EXTRACT the following types of information:
-1. Medical conditions (diagnoses, symptoms, ongoing issues)
-2. Medications (names, dosages, frequencies)
-3. Allergies (substances, reactions, severity)
-4. Vital signs (blood pressure, heart rate, temperature, etc.)
-5. Lab results (test names, values, units, dates)
-6. Surgeries or procedures
-7. Family medical history
-8. Lifestyle changes (smoking, alcohol, exercise, diet, sleep)
-9. Demographics updates (height, weight, etc.)
-
-OUTPUT FORMAT:
-{
-  "hasNewInfo": true/false,
-  "patches": [
-    {
-      "field": "currentConditions|medications|allergies|vitals|labResults|surgeries|familyHistory|lifestyle|demographics",
-      "operation": "add|update|remove",
-      "value": { ... },
-      "confidence": 0.0-1.0
-    }
-  ]
+Interface ProfilePatch {
+  field: "demographics" | "currentConditions" | "persistentConditions" | "pastConditions" | "medications" | "allergies" | "vitals" | "labResults" | "surgeries" | "familyHistory" | "lifestyle" | "freeNotes";
+  operation: "add" | "update" | "remove";
+  value: {
+     // SCHEMA PER FIELD (provide only relevant fields for the operation):
+     // currentConditions, persistentConditions, pastConditions: { name: string, diagnosedAt?: string, resolvedAt?: string, severity?: string }
+     // medications: { name: string, dosage?: string, frequency?: string, startedAt?: string }
+     // allergies: { substance: string, reaction?: string, severity?: string }
+     // vitals: { type: string, value: string }
+     // labResults: { name: string, value: string, unit?: string, referenceRange?: string }
+     // surgeries: { name: string, date?: string }
+     // familyHistory: { relation: string, condition: string }
+     // demographics: { dateOfBirth?: string, sex?: string, height?: string, weight?: string, bloodType?: string }
+     // lifestyle: { smoking?: string, alcohol?: string, exercise?: string, diet?: string, sleep?: string }
+  };
+  confidence: number; // 0–1
+  notes: string; // Concise description of WHY this change is being made or what the info is.
+  recordedAt?: string; // Optional: ISO timestamp if a specific past time is mentioned. Omit for current information.
 }
 
 RULES:
-1. Only extract CLEARLY STATED information with reasonable confidence
-2. Use "add" for new items, "update" for existing items, "remove" for discontinued items
-3. Assign confidence scores based on clarity:
-   - 0.9-1.0: Explicitly stated medical facts
-   - 0.7-0.9: Clear mentions but need verification
-   - 0.5-0.7: Implied but not clearly stated
-   - Below 0.5: Do not include
-4. For medications, include dosage and frequency if mentioned
-5. For conditions, include severity if mentioned
-6. For vitals, include the type, value, and unit
-7. Do NOT extract hypothetical or speculative information
-8. Do NOT extract information the user is asking about ("What if I have X?")
-9. DO extract information the user confirms or states about themselves
-
-EXAMPLES:
-- User: "I started taking metformin 500mg twice daily" →
-  { "field": "medications", "operation": "add", "value": { "name": "Metformin", "dosage": "500mg", "frequency": "twice daily" }, "confidence": 0.95 }
-
-- User: "My doctor said I'm allergic to penicillin" →
-  { "field": "allergies", "operation": "add", "value": { "substance": "Penicillin" }, "confidence": 0.9 }
-
-- User: "I quit smoking last month" →
-  { "field": "lifestyle", "operation": "update", "value": { "smoking": "Quit last month" }, "confidence": 0.95 }
-
-If no new information is detected, return: { "hasNewInfo": false, "patches": [] }
+1. Return ONLY JSON. No markdown, no preamble, no explanation.
+2. Only extract CLEARLY STATED information.
+3. Use "add" for new items, "update" to modify existing items, "remove" for discontinued items.
+4. Assign confidence scores based on clarity (0.0 to 1.0).
+5. For EVERY patch, provide a concise "notes" field explaining the extraction.
+6. For medications, include dosage and frequency if mentioned.
+7. For conditions, include severity if mentioned.
+8. Use "recordedAt" ONLY if the user mentions a specific date or time for the events. If omitted, the system will use the current time ({currentTime}).
+9. If no new information is detected, return: { "hasNewInfo": false, "patches": [] }

@@ -1,18 +1,3 @@
-Generate a concise 3-5 word title for this medical conversation.
+You are generating a short title for a medical chat session. Given the first exchange below, output a title of maximum 8 words. Output only the title, no quotes, no punctuation at the end, no explanation.
 
-User message: {USER_MESSAGE}
-Assistant response: {ASSISTANT_RESPONSE}
-
-The title should:
-- Capture the main medical topic or concern
-- Be clear and descriptive
-- Be 3-5 words only
-- NOT include the word "Chat" or "Conversation"
-
-Examples:
-- "Diabetes Medication Discussion"
-- "Chest Pain Evaluation"
-- "Allergy Symptom Management"
-- "Lab Results Review"
-
-Title:
+{EXCHANGE}

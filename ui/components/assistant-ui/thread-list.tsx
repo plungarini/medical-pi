@@ -27,6 +27,23 @@ export function ThreadList() {
     }
   }, [pathname]);
 
+  // Listen for real-time updates from SSE
+  useEffect(() => {
+    const handleUpdate = () => {
+      loadSessions();
+    };
+
+    window.addEventListener("live:session:created", handleUpdate);
+    window.addEventListener("live:session:updated", handleUpdate);
+    window.addEventListener("live:session:deleted", handleUpdate);
+
+    return () => {
+      window.removeEventListener("live:session:created", handleUpdate);
+      window.removeEventListener("live:session:updated", handleUpdate);
+      window.removeEventListener("live:session:deleted", handleUpdate);
+    };
+  }, []);
+
   async function loadSessions() {
     try {
       setLoading(true);

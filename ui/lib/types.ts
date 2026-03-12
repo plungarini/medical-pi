@@ -51,6 +51,7 @@ export interface Condition {
   resolvedAt?: string;
   severity?: string;
   notes?: string;
+  recordedAt?: string;
   source: ProfileSource;
   confidence?: number;
 }
@@ -62,6 +63,7 @@ export interface Medication {
   frequency?: string;
   startedAt?: string;
   notes?: string;
+  recordedAt?: string;
   source: ProfileSource;
 }
 
@@ -70,6 +72,8 @@ export interface Allergy {
   substance: string;
   reaction?: string;
   severity?: string;
+  notes?: string;
+  recordedAt?: string;
   source: ProfileSource;
 }
 
@@ -88,6 +92,7 @@ export interface LabResult {
   unit?: string;
   referenceRange?: string;
   recordedAt: string;
+  notes?: string;
   source: ProfileSource;
 }
 
@@ -96,6 +101,7 @@ export interface Surgery {
   name: string;
   date?: string;
   notes?: string;
+  recordedAt?: string;
   source: ProfileSource;
 }
 
@@ -104,6 +110,7 @@ export interface FamilyCondition {
   relation: string;
   condition: string;
   notes?: string;
+  recordedAt?: string;
   source: ProfileSource;
 }
 
