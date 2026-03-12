@@ -58,10 +58,27 @@ export async function jsonCompletion<T>(
   schema?: unknown,
   options: Omit<CompletionOptions, "responseFormat"> = {}
 ): Promise<T> {
-  const content = await completion(messages, {
+  let content = await completion(messages, {
     ...options,
     responseFormat: schema ? (schema as ChatCompletionCreateParams["response_format"]) : { type: "json_object" },
   });
+
+  // Sanitization: strip markdown blocks
+  if (content.includes("```")) {
+    const rx = /```(?:json)?\s*([\s\S]*?)\s*```/;
+    const match = rx.exec(content);
+    if (match) {
+      content = match[1];
+    }
+  }
+
+  // Sanitization: strip leading/trailing whitespace
+  content = content.trim();
+
+  // Sanitization: strip potential trailing junk (like accidental comments or trailing characters)
+  // This is a basic safety net for models that might ignore the "no comments" rule
+  content = content.replaceAll(/\/\/.*/g, ""); // Remove // comments
+  content = content.replaceAll(/\/\*[\s\S]*?\*\//g, ""); // Remove /* */ comments
 
   try {
     return JSON.parse(content) as T;

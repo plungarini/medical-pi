@@ -16,30 +16,29 @@ Interface ProfileDiff {
 Interface ProfilePatch {
   field: "demographics" | "currentConditions" | "persistentConditions" | "pastConditions" | "medications" | "allergies" | "vitals" | "labResults" | "surgeries" | "familyHistory" | "lifestyle" | "freeNotes";
   operation: "add" | "update" | "remove";
-  value: {
-     // SCHEMA PER FIELD (provide only relevant fields for the operation):
-     // currentConditions, persistentConditions, pastConditions: { name: string, diagnosedAt?: string, resolvedAt?: string, severity?: string }
-     // medications: { name: string, dosage?: string, frequency?: string, startedAt?: string }
-     // allergies: { substance: string, reaction?: string, severity?: string }
-     // vitals: { type: string, value: string }
-     // labResults: { name: string, value: string, unit?: string, referenceRange?: string }
-     // surgeries: { name: string, date?: string }
-     // familyHistory: { relation: string, condition: string }
-     // demographics: { dateOfBirth?: string, sex?: string, height?: string, weight?: string, bloodType?: string }
-     // lifestyle: { smoking?: string, alcohol?: string, exercise?: string, diet?: string, sleep?: string }
-  };
-  confidence: number; // 0–1
-  notes: string; // Concise description of WHY this change is being made or what the info is.
-  recordedAt?: string; // Optional: ISO timestamp if a specific past time is mentioned. Omit for current information.
+  value: object;
+  confidence: number;
+  notes: string;
+  recordedAt?: string;
 }
 
+FIELD SCHEMAS (for the "value" object):
+- currentConditions, persistentConditions, pastConditions: { name: string, diagnosedAt?: string, resolvedAt?: string, severity?: string }
+- medications: { name: string, dosage?: string, frequency?: string, startedAt?: string }
+- allergies: { substance: string, reaction?: string, severity?: string }
+- vitals: { type: string, value: string }
+- labResults: { name: string, value: string, unit?: string, referenceRange?: string }
+- surgeries: { name: string, date?: string }
+- familyHistory: { relation: string, condition: string }
+- demographics: { dateOfBirth?: string, sex?: string, height?: string, weight?: string, bloodType?: string }
+- lifestyle: { smoking?: string, alcohol?: string, exercise?: string, diet?: string, sleep?: string }
+
 RULES:
-1. Return ONLY JSON. No markdown, no preamble, no explanation.
-2. Only extract CLEARLY STATED information.
-3. Use "add" for new items, "update" to modify existing items, "remove" for discontinued items.
-4. Assign confidence scores based on clarity (0.0 to 1.0).
-5. For EVERY patch, provide a concise "notes" field explaining the extraction.
-6. For medications, include dosage and frequency if mentioned.
-7. For conditions, include severity if mentioned.
-8. Use "recordedAt" ONLY if the user mentions a specific date or time for the events. If omitted, the system will use the current time ({currentTime}).
-9. If no new information is detected, return: { "hasNewInfo": false, "patches": [] }
+1. Return ONLY valid JSON.
+2. DO NOT include comments (// or /* */) inside the JSON.
+3. DO NOT wrap the response in markdown code blocks.
+4. Only extract CLEARLY STATED information.
+5. Use "add" for new items, "update" to modify existing items, "remove" for discontinued items.
+6. For EVERY patch, provide a concise "notes" field explaining the extraction.
+7. Use "recordedAt" ONLY if the user mentions a specific date or time. Default: current time ({currentTime}).
+8. If no new information is detected, return: { "hasNewInfo": false, "patches": [] }
