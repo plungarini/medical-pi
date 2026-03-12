@@ -4,7 +4,9 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import fs from "node:fs";
 
-const DB_PATH = process.env.DB_PATH || "./data/medical.db";
+import { SUBMODULE_ROOT } from "./env.js";
+
+const DB_PATH = process.env.DB_PATH || path.join(SUBMODULE_ROOT, "data/medical.db");
 
 // Ensure directory exists
 const dbDir = path.dirname(DB_PATH);
