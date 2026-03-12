@@ -73,7 +73,7 @@ export function startHeartbeatJobs(): void {
     try {
         // Sync messages from last 15 mins
         const recentMessages = prepare(`
-            SELECT m.id, m.session_id, m.user_id, m.role, m.content, s.title as session_title, m.created_at
+            SELECT m.id, m.session_id, s.user_id, m.role, m.content, s.title as session_title, m.created_at
             FROM messages m
             JOIN sessions s ON s.id = m.session_id
             WHERE m.created_at > datetime('now', '-15 minutes')

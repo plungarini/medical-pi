@@ -9,9 +9,9 @@
  * Cross-platform: Works on Windows, Linux (x64/ARM), and macOS
  */
 
-import { createInterface } from "readline";
-import { writeFileSync, readFileSync, existsSync, mkdirSync } from "fs";
-import { execSync } from "child_process";
+import { createInterface } from "node:readline";
+import { writeFileSync, readFileSync, existsSync, mkdirSync } from "node:fs";
+import { execSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import os from "node:os";
@@ -33,36 +33,51 @@ const rl = createInterface({
   output: process.stdout,
 });
 
+/**
+ * @param {string} prompt 
+ * @param {string} [defaultValue] 
+ * @returns {Promise<string>}
+ */
 function question(prompt, defaultValue = "") {
   return new Promise((resolve) => {
     const displayDefault = defaultValue || "";
     const fullPrompt = displayDefault ? `${prompt} [${displayDefault}]: ` : `${prompt}: `;
     rl.question(fullPrompt, (answer) => {
-      resolve(answer !== undefined ? answer.trim() : "");
+      resolve(answer.trim());
     });
   });
 }
 
+/**
+ * @param {string} endpoint 
+ */
 async function checkModalEndpoint(endpoint) {
-  if (!endpoint) return false;
-  try {
-    const response = await fetch(`${endpoint}/health`);
-    return response.ok;
-  } catch {
-    return false;
+  if (endpoint) {
+    try {
+      const response = await fetch(`${endpoint}/health`);
+      return response.ok;
+    } catch {
+      return false;
+    }
   }
+  return false;
 }
 
+/**
+ * @param {string} apiKey 
+ */
 async function checkOpenRouterKey(apiKey) {
-  if (!apiKey) return false;
-  try {
-    const response = await fetch("https://openrouter.ai/api/v1/auth/key", {
-      headers: { Authorization: `Bearer ${apiKey}` },
-    });
-    return response.ok;
-  } catch {
-    return false;
+  if (apiKey) {
+    try {
+      const response = await fetch("https://openrouter.ai/api/v1/auth/key", {
+        headers: { Authorization: `Bearer ${apiKey}` },
+      });
+      return response.ok;
+    } catch {
+      return false;
+    }
   }
+  return false;
 }
 
 function checkMeilisearch() {
@@ -108,6 +123,9 @@ function getMeilisearchDownloadUrl() {
   return null;
 }
 
+/**
+ * @param {string} binDir 
+ */
 async function installMeilisearchWindows(binDir) {
   console.log("\n📦 Installing Meilisearch for Windows...");
   try {
@@ -131,7 +149,8 @@ async function installMeilisearchWindows(binDir) {
     console.log(`   ${meiliPath} --db-path ./data/meilisearch --http-addr 127.0.0.1:7700`);
     
     return { binPath: meiliPath, manual: true };
-  } catch (error) {
+  } catch (err) {
+    const error = err instanceof Error ? err : new Error(String(err));
     console.error("❌ Failed to install Meilisearch:", error.message);
     console.log("\n📋 Manual installation:");
     console.log("1. Download from: https://github.com/meilisearch/meilisearch/releases");
@@ -141,6 +160,9 @@ async function installMeilisearchWindows(binDir) {
   }
 }
 
+/**
+ * @param {string} binDir 
+ */
 async function installMeilisearchUnix(binDir) {
   console.log(`\n📦 Installing Meilisearch (${IS_MAC ? 'macOS' : 'Linux'} ${ARCH})...`);
   try {
@@ -190,7 +212,8 @@ WantedBy=default.target
         
         console.log("🚀 Systemd service created");
         console.log("   Start with: systemctl --user enable --now meilisearch");
-      } catch (e) {
+      } catch {
+        // Service creation failed, but we can continue
         console.log("⚠️  Could not create systemd service (optional)");
       }
     }
@@ -199,7 +222,8 @@ WantedBy=default.target
     console.log(`   ${meiliPath} --db-path ./data/meilisearch --http-addr 127.0.0.1:7700`);
     
     return { binPath: meiliPath, manual: IS_MAC };
-  } catch (error) {
+  } catch (err) {
+    const error = err instanceof Error ? err : new Error(String(err));
     console.error("❌ Failed to install Meilisearch:", error.message);
     console.log("\n📋 Manual installation:");
     console.log("1. Download from: https://github.com/meilisearch/meilisearch/releases");
@@ -219,6 +243,9 @@ async function installMeilisearch() {
   return await installMeilisearchUnix(binDir);
 }
 
+/**
+ * @param {string} storagePath 
+ */
 function createDirectories(storagePath) {
   console.log("\n📁 Creating directories...");
   try {
@@ -228,7 +255,8 @@ function createDirectories(storagePath) {
     mkdirSync(path.join(ROOT_DIR, "data", "meilisearch"), { recursive: true });
     console.log("✅ Directories created");
     return true;
-  } catch (error) {
+  } catch (err) {
+    const error = err instanceof Error ? err : new Error(String(err));
     console.error("❌ Failed to create directories:", error.message);
     return false;
   }
@@ -241,11 +269,12 @@ async function main() {
   console.log("╚════════════════════════════════════════════════════════╝\n");
 
   // Load existing env if present
-  let existingEnv = {};
+  /** @type {Record<string, string>} */
+  const existingEnv = {};
   if (existsSync(ENV_PATH)) {
     const currentContent = readFileSync(ENV_PATH, "utf8");
     currentContent.split("\n").forEach((line) => {
-      const trimmed = line ? line.trim() : "";
+      const trimmed = line.trim();
       if (trimmed && !trimmed.startsWith("#")) {
         const eqIndex = trimmed.indexOf("=");
         if (eqIndex > 0) {
@@ -271,22 +300,21 @@ async function main() {
   const saveProgress = () => {
     let out = "";
     for (const line of lines) {
-      const lineStr = line || "";
-      const trimmed = lineStr.trim();
+      const trimmed = line.trim();
       // Preserve empty lines and comments
       if (!trimmed || trimmed.startsWith("#")) {
-        out += lineStr + "\n";
+        out += line + "\n";
         continue;
       }
       // For variable lines, use existing value or default from example
       const eqIndex = trimmed.indexOf("=");
       if (eqIndex < 0) {
-        out += lineStr + "\n";
+        out += line + "\n";
         continue;
       }
       const key = trimmed.substring(0, eqIndex);
       const defaultVal = trimmed.substring(eqIndex + 1);
-      const val = existingEnv[key] !== undefined ? existingEnv[key] : defaultVal;
+      const val = Object.hasOwn(existingEnv, key) ? existingEnv[key] : defaultVal;
       out += `${key}=${val}\n`;
     }
     writeFileSync(ENV_PATH, out);
@@ -322,7 +350,8 @@ async function main() {
     }
 
     const key = trimmed.substring(0, eqIndex);
-    const defaultValue = existingEnv[key] !== undefined ? existingEnv[key] : trimmed.substring(eqIndex + 1);
+    const valueInEnv = existingEnv[key];
+    const defaultValue = valueInEnv !== undefined ? valueInEnv : trimmed.substring(eqIndex + 1);
 
     // Special handling for certain keys
     if (key === "JWT_SECRET" && !defaultValue) {
@@ -342,7 +371,7 @@ async function main() {
 
     // Special handling for PORT to explain the API port
     if (key === "PORT") {
-      const portNum = parseInt(defaultValue || "3003", 10);
+      const portNum = Number.parseInt(defaultValue || "3003", 10);
       const apiPort = portNum + 1000;
       console.log(`\nℹ️  Port Configuration:`);
       console.log(`   - UI will run on PORT (${portNum})`);
@@ -399,7 +428,7 @@ async function main() {
   console.log("║              Setup Complete! 🎉                        ║");
   console.log("╚════════════════════════════════════════════════════════╝");
   const uiPort = existingEnv["PORT"] || "3003";
-  const apiPort = parseInt(uiPort) + 1000;
+  const apiPort = Number.parseInt(uiPort, 10) + 1000;
 
   console.log("\nNext steps:");
   console.log("1. npm install          # Install all dependencies");
@@ -412,7 +441,10 @@ async function main() {
   rl.close();
 }
 
-main().catch((error) => {
+try {
+  await main();
+} catch (err) {
+  const error = err instanceof Error ? err : new Error(String(err));
   console.error("\n❌ Setup failed:", error.message);
   process.exit(1);
-});
+}
