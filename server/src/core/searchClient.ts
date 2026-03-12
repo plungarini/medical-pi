@@ -121,7 +121,8 @@ export async function indexMessages(
     });
 
     if (!response.ok) {
-      throw new Error(`Meilisearch index error: ${response.status}`);
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(`Meilisearch index error: ${response.status} - ${JSON.stringify(errorData)}`);
     }
   } catch (error) {
     logger.error("Index messages error", error);
@@ -153,9 +154,43 @@ export async function indexDocuments(
     });
 
     if (!response.ok) {
-      throw new Error(`Meilisearch index error: ${response.status}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`Meilisearch index error: ${response.status} - ${JSON.stringify(errorData)}`);
     }
   } catch (error) {
     logger.error("Index documents error", error);
+  }
+}
+
+/**
+ * Initializes Meilisearch indexes and sets primary keys.
+ * This helps prevent 500 errors caused by missing indexes or wrong primary keys.
+ */
+export async function initIndexes(): Promise<void> {
+  const indexes = ["messages", "documents"];
+  for (const index of indexes) {
+    try {
+      const response = await fetch(`${MEILISEARCH_HOST}/indexes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          uid: index,
+          primaryKey: "id",
+        }),
+      });
+
+      if (response.ok) {
+        logger.info(`Meilisearch index "${index}" initialized.`);
+      } else {
+        const data = await response.json() as any;
+        if (data.code === "index_already_exists") {
+          logger.debug(`Meilisearch index "${index}" already exists.`);
+        } else {
+          logger.warn(`Failed to initialize Meilisearch index "${index}":`, data);
+        }
+      }
+    } catch (error) {
+      logger.error(`Error initializing Meilisearch index "${index}":`, error);
+    }
   }
 }

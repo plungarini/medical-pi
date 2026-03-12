@@ -26,10 +26,7 @@ const ALLOWED_PROFILE_FIELDS = [
 ];
 
 // Load profile extractor prompt
-const PROFILE_EXTRACTOR_PROMPT = fs.readFileSync(
-	path.join(SUBMODULE_ROOT, 'prompts/profile-extractor.txt'),
-	'utf-8',
-);
+const PROFILE_EXTRACTOR_PROMPT = fs.readFileSync(path.join(SUBMODULE_ROOT, 'prompts/profile-extractor.txt'), 'utf-8');
 
 // Sub-schemas for medical entities
 const ConditionSchema = z.object({
@@ -205,7 +202,6 @@ export const ProfileDiffSchema = z.object({
 	),
 });
 
-
 /**
  * Prunes non-standard/ghost fields from the profile object.
  * This is a self-healing mechanism for data corrupted by path-based LLM extraction.
@@ -363,19 +359,8 @@ export async function breathe(
 			return;
 		}
 
-		// Build profile summary (top-level fields for context)
-		const profileSummary = {
-			demographics: profile.demographics,
-			currentConditions: profile.currentConditions.map((c) => c.name),
-			persistentConditions: profile.persistentConditions.map((c) => c.name),
-			pastConditions: profile.pastConditions.map((c) => c.name),
-			medications: profile.medications.map((m) => m.name),
-			allergies: profile.allergies.map((a) => a.substance),
-			lifestyle: profile.lifestyle,
-		};
-
 		const exchange = JSON.stringify({ user: userMessage, assistant: assistantContent });
-		const prompt = PROFILE_EXTRACTOR_PROMPT.replace('{profileSummary}', JSON.stringify(profileSummary))
+		const prompt = PROFILE_EXTRACTOR_PROMPT.replace('{profileSummary}', JSON.stringify(profile))
 			.replace('{exchange}', exchange)
 			.replace('{currentTime}', now());
 
@@ -484,7 +469,11 @@ function applyPatches(profile: MedicalProfile, patches: ProfileDiff['patches']):
  * Processes a single patch on the profile.
  * Returns true if the field was updated.
  */
-function processPatch(profile: MedicalProfile, field: keyof Omit<MedicalProfile, 'userId' | 'updatedAt'>, patch: ProfileDiff['patches'][0]): boolean {
+function processPatch(
+	profile: MedicalProfile,
+	field: keyof Omit<MedicalProfile, 'userId' | 'updatedAt'>,
+	patch: ProfileDiff['patches'][0],
+): boolean {
 	const currentValue = profile[field];
 	const patchValue = patch.value as any;
 
@@ -494,11 +483,36 @@ function processPatch(profile: MedicalProfile, field: keyof Omit<MedicalProfile,
 
 	// Handle top-level object update (demographics, lifestyle, freeNotes)
 	if (patch.operation === 'add' || patch.operation === 'update') {
+		// Deep equality check to skip redundant updates
+		if (isDeepEqual(currentValue, patchValue)) {
+			return false;
+		}
 		(profile[field] as any) = patchValue;
 		return true;
 	}
 
 	return false;
+}
+
+/**
+ * Basic deep equality check for profile values.
+ */
+function isDeepEqual(a: any, b: any): boolean {
+	if (a === b) return true;
+	if (a == null || b == null) return a === b;
+	if (typeof a !== 'object' || typeof b !== 'object') return a === b;
+
+	const keysA = Object.keys(a);
+	const keysB = Object.keys(b);
+
+	if (keysA.length !== keysB.length) return false;
+
+	for (const key of keysA) {
+		if (!keysB.includes(key)) return false;
+		if (!isDeepEqual(a[key], b[key])) return false;
+	}
+
+	return true;
 }
 
 function processArrayPatch(
@@ -522,10 +536,25 @@ function processArrayPatch(
 	}
 
 	if (patch.operation === 'update') {
-		const itemIndex = currentValue.findIndex((item: any) => item.id === patchValue.id);
+		const itemIndex = currentValue.findIndex(
+			(item: any) =>
+				item.id === patchValue.id ||
+				(patchValue.condition && item.condition === patchValue.condition) ||
+				(patchValue.name && item.name === patchValue.name) ||
+				(patchValue.substance && item.substance === patchValue.substance),
+		);
 		if (itemIndex >= 0) {
+			const existingItem = currentValue[itemIndex];
+			// Merge patch with existing to check for actual changes
+			const mergedItem = { ...existingItem, ...patchValue };
+
+			// If no actual changes after merge, skip update
+			if (isDeepEqual(existingItem, mergedItem)) {
+				return false;
+			}
+
 			const updatedArray = [...currentValue];
-			updatedArray[itemIndex] = { ...updatedArray[itemIndex], ...patchValue };
+			updatedArray[itemIndex] = mergedItem;
 			(profile[field] as any[]) = updatedArray;
 			return true;
 		}

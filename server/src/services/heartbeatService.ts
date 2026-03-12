@@ -1,9 +1,8 @@
 import cron from 'node-cron';
 import { logger } from "../core/logger.js";
-import { breathe } from "./profileService.js";
 import { generateAndSave } from "./titleService.js";
 import { prepare } from "../core/db.js";
-import { indexMessages, indexDocuments } from "../core/searchClient.js";
+import { indexMessages, indexDocuments, initIndexes } from "../core/searchClient.js";
 
 const HEARTBEAT_ENABLED = process.env.HEARTBEAT_ENABLED !== "false";
 
@@ -13,7 +12,12 @@ export function startHeartbeatJobs(): void {
     return;
   }
 
+  // Initialize Meilisearch indexes on startup
+  initIndexes().catch(err => logger.error("Failed to initialize Meilisearch indexes", err));
+
   // 1. Profile Review — scan last 10 sessions for missed profile info (Every Hour)
+  // DEACTIVATED: User requested to remove profile extraction from heartbeat
+  /*
   cron.schedule(process.env.HEARTBEAT_INTERVAL ?? '0 * * * *', async () => {
     logger.info("Heartbeat: Running profile review");
     try {
@@ -35,6 +39,7 @@ export function startHeartbeatJobs(): void {
       logger.info("Heartbeat: Profile review completed");
     } catch (err) { logger.warn('Heartbeat: profile review failed', err); }
   });
+  */
 
   // 2. Title Repair — generate titles for sessions with empty title (2 AM)
   cron.schedule(process.env.TITLE_REPAIR_CRON ?? '0 2 * * *', async () => {
