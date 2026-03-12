@@ -1,13 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { generateId, now, queries } from '../core/db.js';
 import { logger } from '../core/logger.js';
 import { jsonCompletion } from '../core/openrouterClient.js';
 import type { MedicalProfile, ProfileDiff, ProfileHistoryEntry } from '../types/index.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+import { SUBMODULE_ROOT } from '../core/env.js';
 
 const PROFILE_MIN_CONFIDENCE = Number.parseFloat(process.env.PROFILE_MIN_CONFIDENCE ?? '0.7');
 
@@ -28,7 +27,7 @@ const ALLOWED_PROFILE_FIELDS = [
 
 // Load profile extractor prompt
 const PROFILE_EXTRACTOR_PROMPT = fs.readFileSync(
-	path.join(__dirname, '../../../prompts/profile-extractor.txt'),
+	path.join(SUBMODULE_ROOT, 'prompts/profile-extractor.txt'),
 	'utf-8',
 );
 

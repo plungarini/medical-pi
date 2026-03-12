@@ -4,10 +4,9 @@ import { prepare, queries } from "../core/db.js";
 import { updateSession } from "./sessionService.js";
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PROMPTS_DIR = path.join(__dirname, "../../../prompts");
+import { SUBMODULE_ROOT } from "../core/env.js";
+const PROMPTS_DIR = path.join(SUBMODULE_ROOT, "prompts");
 
 export async function generateAndSave(sessionId: string): Promise<void> {
   const session = queries.getSessionById.get([sessionId]) as any;

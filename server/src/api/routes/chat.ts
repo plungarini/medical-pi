@@ -3,7 +3,6 @@ import { consumeStream, createUIMessageStreamResponse, streamText, TextStreamPar
 import type { FastifyInstance } from 'fastify';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { logger } from '../../core/logger.js';
 import { createMessage, getRecentMessages } from '../../services/chatService.js';
 import { getProfile, breathe } from '../../services/profileService.js';
@@ -11,8 +10,8 @@ import { createSession } from '../../services/sessionService.js';
 import { generateAndSave } from '../../services/titleService.js';
 import { saveMemory } from '../../services/memoryService.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const SYSTEM_PROMPT = fs.readFileSync(path.join(__dirname, '../../../../prompts/system.txt'), 'utf-8');
+import { SUBMODULE_ROOT } from '../../core/env.js';
+const SYSTEM_PROMPT = fs.readFileSync(path.join(SUBMODULE_ROOT, 'prompts/system.txt'), 'utf-8');
 const CONTEXT_LIMIT = Number.parseInt(process.env.CONTEXT_MESSAGE_LIMIT ?? '20', 10);
 
 const MODAL_ENDPOINT = process.env.MODAL_ENDPOINT;
