@@ -8,7 +8,7 @@ const DB_PATH = process.env.DB_PATH || "./data/medical.db";
 
 // Ensure directory exists
 const dbDir = path.dirname(DB_PATH);
-if (!fs.existsSync(dbDir)) {
+if (dbDir && dbDir !== "." && !fs.existsSync(dbDir)) {
   fs.mkdirSync(dbDir, { recursive: true });
 }
 
