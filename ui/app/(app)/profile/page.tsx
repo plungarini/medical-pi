@@ -201,6 +201,28 @@ export default function ProfilePage() {
   );
 }
 
+function SeverityBadge({ severity }: Readonly<{ severity?: string }>) {
+  if (!severity) return null;
+
+  const s = severity.toLowerCase();
+  let variant: "default" | "secondary" | "outline" | "destructive" = "outline";
+  let className = "text-[10px] px-1.5 h-4 capitalize font-medium";
+
+  if (s.includes("mild") || s.includes("low")) {
+    className += " bg-emerald-500/10 text-emerald-500 border-emerald-500/20";
+  } else if (s.includes("moderate") || s.includes("medium")) {
+    className += " bg-amber-500/10 text-amber-500 border-amber-500/20";
+  } else if (s.includes("severe") || s.includes("high") || s.includes("critical")) {
+    className += " bg-destructive/10 text-destructive border-destructive/20";
+  }
+
+  return (
+    <Badge variant={variant} className={className}>
+      {severity}
+    </Badge>
+  );
+}
+
 function EntryCard({
   title,
   subtitle,
@@ -208,23 +230,28 @@ function EntryCard({
   item,
   onEdit,
   onDelete,
-}: {
+  severity,
+}: Readonly<{
   title: string;
   subtitle?: string;
   field: string;
   item: any;
   onEdit: (field: string, item: any) => void;
   onDelete: (field: string, id: string) => void;
-}) {
+  severity?: string;
+}>) {
   return (
     <div className="group p-3 border rounded-lg bg-card/50 transition-colors hover:bg-card">
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 space-y-1">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <p className="font-semibold">{title}</p>
-            <Badge variant={item.source === "auto" ? "secondary" : "outline"} className="text-[10px] px-1.5 h-4 capitalize">
-              {item.source}
-            </Badge>
+            <div className="flex items-center gap-1.5">
+              <Badge variant={item.source === "auto" ? "secondary" : "outline"} className="text-[10px] px-1.5 h-4 capitalize">
+                {item.source}
+              </Badge>
+              <SeverityBadge severity={severity} />
+            </div>
           </div>
           {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
           {item.notes && (
@@ -287,7 +314,8 @@ function ConditionsSection({
               field={condition._field}
               item={condition}
               title={condition.name}
-              subtitle={condition.severity ? `Severity: ${condition.severity}` : undefined}
+              subtitle={undefined}
+              severity={condition.severity}
               onEdit={onEdit}
               onDelete={onDelete}
             />
@@ -366,6 +394,7 @@ function AllergiesSection({
               item={allergy}
               title={allergy.substance}
               subtitle={allergy.reaction ? `Reaction: ${allergy.reaction}` : undefined}
+              severity={allergy.severity}
               onEdit={onEdit}
               onDelete={onDelete}
             />
