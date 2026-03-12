@@ -1,40 +1,5 @@
 {
-  "name": "medical-pi",
-  "version": "1.5.0",
-  "description": "Medical AI Assistant powered by MedGemma",
-  "type": "module",
-  "scripts": {
-    "postinstall": "npm run setup:ui",
-    "setup:ui": "cd ui && npm install",
-    "dev": "node scripts/dev-with-meilisearch.js",
-    "dev:server": "tsx server/index.ts",
-    "dev:ui": "cd ui && npm run dev",
-    "build": "npm run build:server && npm run build:ui",
-    "build:server": "tsc -p server/tsconfig.json",
-    "build:ui": "cd ui && npm run build",
-    "start": "node scripts/start-with-meilisearch.js",
-    "start:server": "node server/dist/index.js",
-    "start:ui": "cd ui && npm run start",
-    "start:meilisearch": "node scripts/start-meilisearch.js",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:ui": "cd ui && npm test 2>/dev/null || echo 'No UI tests configured'",
-    "typecheck": "tsc -p server/tsconfig.json --noEmit",
-    "typecheck:ui": "cd ui && npm run typecheck 2>/dev/null || echo 'No typecheck in UI'",
-    "lint": "biome check .",
-    "lint:fix": "biome check --write .",
-    "format": "biome format .",
-    "format:fix": "biome format --write .",
-    "onboard": "node scripts/onboard.js"
-  },
-  "keywords": [
-    "medical",
-    "ai",
-    "medgemma",
-    "health"
-  ],
   "author": "",
-  "license": "MIT",
   "dependencies": {
     "@ai-sdk/openai": "^3.0.36",
     "@assistant-ui/react": "^0.12.14",
@@ -73,6 +38,7 @@
     "zod": "^3.23.0",
     "zustand": "^5.0.11"
   },
+  "description": "Medical AI Assistant powered by MedGemma",
   "devDependencies": {
     "@biomejs/biome": "^2.4.4",
     "@tailwindcss/postcss": "^4.2.1",
@@ -86,5 +52,41 @@
     "tsx": "^4.19.0",
     "typescript": "^5.9.3",
     "vitest": "^2.1.0"
-  }
+  },
+  "keywords": [
+    "medical",
+    "ai",
+    "medgemma",
+    "health"
+  ],
+  "license": "MIT",
+  "name": "medical-pi",
+  "scripts": {
+    "build": "npm run build:server && npm run build:ui",
+    "build:server": "tsc -p server/tsconfig.json",
+    "build:ui": "cd ui && npm run build",
+    "dev": "node scripts/dev-with-meilisearch.js",
+    "dev:server": "tsx server/index.ts",
+    "dev:ui": "cd ui && npm run dev",
+    "format": "biome format .",
+    "format:fix": "biome format --write .",
+    "install:all": "npm run install:ui && npm run install:server",
+    "install:server": "cd server && npm install",
+    "install:ui": "cd ui && npm install",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "onboard": "node scripts/onboard.js",
+    "postinstall": "npm run install:all",
+    "start": "node scripts/start-with-meilisearch.js",
+    "start:meilisearch": "node scripts/start-meilisearch.js",
+    "start:server": "node server/dist/index.js",
+    "start:ui": "cd ui && npm run start",
+    "test": "vitest run",
+    "test:ui": "cd ui && npm test 2>/dev/null || echo 'No UI tests configured'",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p server/tsconfig.json --noEmit",
+    "typecheck:ui": "cd ui && npm run typecheck 2>/dev/null || echo 'No typecheck in UI'"
+  },
+  "type": "module",
+  "version": "1.6.0"
 }

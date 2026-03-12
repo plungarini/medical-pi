@@ -111,16 +111,22 @@ export async function jsonCompletion<T>(
       responseFormat: getResponseFormatBase(useStrict),
     });
   } catch (error) {
-    // If structured output (strict) fails with 400, try falling back to json_object
+    // If structured output (strict) fails with 400, try strict: false first
     if (error instanceof OpenRouterError && (error as any).cause?.status === 400 && schema && useStrict) {
-      console.warn(`[OPENROUTER] Structured output (strict: true) failed with 400. Falling back to json_object mode with manual schema injection...`);
-      
-      const fallbackMessages = getMessagesWithSchema(messages);
-      
-      content = await completion(fallbackMessages, {
-        ...options,
-        responseFormat: { type: "json_object" } as ChatCompletionCreateParams["response_format"],
-      });
+      console.warn(`[OPENROUTER] Structured output (strict: true) failed. Trying with strict: false...`);
+      try {
+        content = await completion(messages, {
+          ...options,
+          responseFormat: getResponseFormatBase(false),
+        });
+      } catch (fallbackError) {
+        console.warn(`[OPENROUTER] Structured output (strict: false) failed. Falling back to json_object with manual schema injection...`);
+        const fallbackMessages = getMessagesWithSchema(messages);
+        content = await completion(fallbackMessages, {
+          ...options,
+          responseFormat: { type: "json_object" } as ChatCompletionCreateParams["response_format"],
+        });
+      }
     } else {
       throw error;
     }
@@ -142,11 +148,27 @@ export async function jsonCompletion<T>(
   content = content.replaceAll(/\/\/.*/g, ""); // Remove // comments
   content = content.replaceAll(/\/\*[\s\S]*?\*\//g, ""); // Remove /* */ comments
 
+  const repairedContent = repairJson(content);
+
   try {
-    return JSON.parse(content) as T;
+    return JSON.parse(repairedContent) as T;
   } catch (error) {
-    throw new OpenRouterError(`Failed to parse JSON response: ${content}`, error);
+    throw new OpenRouterError(`Failed to parse JSON response: ${content}${repairedContent !== content ? ` (Repaired: ${repairedContent})` : ""}`, error);
   }
+}
+
+/**
+ * Repairs common JSON issues like trailing commas.
+ */
+function repairJson(json: string): string {
+  let repaired = json;
+  
+  // Remove trailing commas in objects and arrays
+  // { "a": 1, } -> { "a": 1 }
+  // [ 1, 2, ]   -> [ 1, 2 ]
+  repaired = repaired.replace(/,\s*([}\]])/g, '$1');
+  
+  return repaired;
 }
 
 export { client, OPENROUTER_MODEL };
