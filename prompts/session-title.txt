@@ -1,18 +1,18 @@
-Generate a concise title (maximum 8 words) for this medical conversation:
+Generate a concise 3-5 word title for this medical conversation.
 
-{CONVERSATION}
+User message: {USER_MESSAGE}
+Assistant response: {ASSISTANT_RESPONSE}
 
-Title requirements:
-- Capture the main topic or concern discussed
-- Be descriptive but brief
-- Use plain language
-- No quotes or special formatting
+The title should:
+- Capture the main medical topic or concern
+- Be clear and descriptive
+- Be 3-5 words only
+- NOT include the word "Chat" or "Conversation"
 
-Examples of good titles:
-- Blood pressure medication questions
-- Understanding recent lab results
-- New headache symptoms discussion
-- Diabetes management follow-up
-- Preparing for upcoming surgery
+Examples:
+- "Diabetes Medication Discussion"
+- "Chest Pain Evaluation"
+- "Allergy Symptom Management"
+- "Lab Results Review"
 
 Title:

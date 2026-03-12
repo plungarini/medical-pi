@@ -1,103 +1,68 @@
-# medical-pi
+# Medical-pi
 
-Medical AI Assistant microservice for the Pi ecosystem. Provides a conversational interface with a local MedGemma model, automatic medical profile extraction, document management, and semantic search.
-
-## Features
-
-- **AI-Powered Chat**: Conversational interface powered by MedGemma 4B via Modal
-- **Breathing Profile**: Automatic extraction and updates of medical information from conversations
-- **Document Management**: Upload and search medical documents (PDFs, images, text)
-- **Semantic Search**: Full-text search across conversations and documents via Meilisearch
-- **Agent Tools**: Search past sessions, retrieve medical profile, search documents, web search
-- **Heartbeat Jobs**: Automated profile review, title generation, and periodic syncing
+Medical AI Assistant powered by MedGemma 4B and Modal.
 
 ## Architecture
 
-```
-medical-pi/
-├── src/
-│   ├── core/              # Infrastructure (db, logger, clients)
-│   ├── services/          # Business logic
-│   ├── api/routes/        # Fastify routes
-│   └── types/             # TypeScript definitions
-├── ui/                    # React + Vite frontend
-├── prompts/               # LLM prompts
-└── scripts/               # Onboarding script
-```
+- **UI**: Next.js + React + TailwindCSS + Assistant-UI (runs on PORT, default 3003)
+- **API**: Fastify + TypeScript + SQLite (runs on PORT+1000, default 4003)
+- **LLM**: Modal-hosted MedGemma 4B
+- **Search**: Meilisearch for full-text search (starts automatically)
 
 ## Quick Start
 
 ```bash
-# Install dependencies
+# Initial setup
 npm install
-
-# Run interactive onboarding
 npm run onboard
 
-# Start development server
+# Development (starts everything: Meilisearch, API, UI)
 npm run dev
 
-# Or start production server
+# Production (starts everything: Meilisearch, API, UI)
+npm run build
 npm start
 ```
 
-## Environment Variables
+## Available Scripts
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `PORT` | Server port | 3003 |
-| `MODAL_ENDPOINT` | MedGamma inference endpoint | Required |
-| `OPENROUTER_API_KEY` | OpenRouter API key | Required |
-| `JWT_SECRET` | JWT signing secret | Required |
-| `MEILISEARCH_HOST` | Meilisearch URL | http://127.0.0.1:7700 |
-| `HEARTBEAT_ENABLED` | Enable cron jobs | true |
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start development (Meilisearch + API + UI with hot reload) |
+| `npm start` | Start production (Meilisearch + API + UI) |
+| `npm run dev:server` | Start only API in dev mode |
+| `npm run dev:ui` | Start only UI in dev mode |
+| `npm run start:server` | Start only API in production |
+| `npm run start:ui` | Start only UI in production |
+| `npm run start:meilisearch` | Start only Meilisearch |
+| `npm run onboard` | Interactive setup wizard |
 
-See `.env.example` for complete configuration.
+## Port Configuration
 
-## API Endpoints
+- `PORT` in `.env` sets the **UI port** (default: 3003)
+- **API port** is automatically `PORT + 1000` (default: 4003)
+- **Meilisearch** runs on port 7700
 
-### Auth
-- `POST /api/auth/login` - Authenticate (creates user if new)
-- `GET /api/auth/me` - Get current user
-
-### Sessions
-- `GET /api/sessions` - List sessions
-- `POST /api/sessions` - Create session
-- `GET /api/sessions/:id` - Get session with messages
-- `PATCH /api/sessions/:id` - Update session
-- `DELETE /api/sessions/:id` - Delete session
-
-### Chat
-- `POST /api/chat/:sessionId` - Send message (SSE streaming)
-
-### Profile
-- `GET /api/profile` - Get medical profile
-- `PATCH /api/profile` - Update profile
-- `GET /api/profile/history` - Get profile update history
-- `DELETE /api/profile/entry/:field/:id` - Delete profile entry
-
-### Documents
-- `GET /api/documents` - List documents
-- `POST /api/documents` - Upload document
-- `GET /api/documents/:id` - Get document
-- `DELETE /api/documents/:id` - Delete document
-
-### Search
-- `GET /api/search?q=...` - Search messages
-
-## Development
-
-```bash
-# Run tests
-npm test
-
-# Type check
-npm run typecheck
-
-# Build for production
-npm run build
+Example:
+```
+PORT=3003  # UI on :3003, API on :4003
+PORT=8080  # UI on :8080, API on :9080
 ```
 
-## License
+## Meilisearch
 
-MIT
+Meilisearch starts **automatically** when you run `npm start` or `npm run dev`. No manual intervention needed.
+
+If you need to run it separately:
+```bash
+npm run start:meilisearch
+```
+
+Or manually:
+```bash
+# Windows
+.\bin\meilisearch.exe --db-path ./data/meilisearch --http-addr 127.0.0.1:7700
+
+# Linux/macOS
+./bin/meilisearch --db-path ./data/meilisearch --http-addr 127.0.0.1:7700
+```
