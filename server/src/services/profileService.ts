@@ -11,6 +11,21 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const PROFILE_MIN_CONFIDENCE = Number.parseFloat(process.env.PROFILE_MIN_CONFIDENCE ?? '0.7');
 
+const ALLOWED_PROFILE_FIELDS = [
+	'demographics',
+	'currentConditions',
+	'persistentConditions',
+	'pastConditions',
+	'medications',
+	'allergies',
+	'vitals',
+	'labResults',
+	'surgeries',
+	'familyHistory',
+	'lifestyle',
+	'freeNotes',
+];
+
 // Load profile extractor prompt
 const PROFILE_EXTRACTOR_PROMPT = fs.readFileSync(
 	path.join(__dirname, '../../../prompts/profile-extractor.txt'),
@@ -22,15 +37,33 @@ export const ProfileDiffSchema = z.object({
 	hasNewInfo: z.boolean(),
 	patches: z.array(
 		z.object({
-			field: z.string(),
+			field: z.enum(ALLOWED_PROFILE_FIELDS as [string, ...string[]]),
 			operation: z.enum(['add', 'update', 'remove']),
-			value: z.unknown(),
 			confidence: z.number().min(0).max(1),
+			value: z.unknown(),
 			notes: z.string(),
 			recordedAt: z.string().optional(),
 		}),
 	),
 });
+
+
+/**
+ * Prunes non-standard/ghost fields from the profile object.
+ * This is a self-healing mechanism for data corrupted by path-based LLM extraction.
+ */
+function sanitizeProfile(profile: any): MedicalProfile {
+	const sanitized: any = {
+		userId: profile.userId,
+		updatedAt: profile.updatedAt || now(),
+	};
+
+	for (const field of ALLOWED_PROFILE_FIELDS) {
+		sanitized[field] = profile[field] || (['lifestyle', 'demographics'].includes(field) ? {} : []);
+	}
+
+	return sanitized as MedicalProfile;
+}
 
 export function getProfile(userId: string): MedicalProfile | null {
 	const row = queries.getProfile.get([userId]) as { user_id: string; profile: string; updated_at: string } | undefined;
@@ -56,7 +89,17 @@ export function getProfile(userId: string): MedicalProfile | null {
 		return defaultProfile;
 	}
 
-	return JSON.parse(row.profile) as MedicalProfile;
+	const rawProfile = JSON.parse(row.profile);
+	const sanitized = sanitizeProfile(rawProfile);
+
+	// If sanitization removed fields, persist the clean version
+	if (Object.keys(rawProfile).length !== Object.keys(sanitized).length + 2) {
+		// +2 for userId and updatedAt which are handled separately in query
+		logger.info(`Self-healing: Pruned invalid fields from profile for user ${userId}`);
+		queries.updateProfile.run([JSON.stringify(sanitized), sanitized.updatedAt, userId]);
+	}
+
+	return sanitized;
 }
 
 export function updateProfile(userId: string, updates: Partial<MedicalProfile>): MedicalProfile {
@@ -65,9 +108,17 @@ export function updateProfile(userId: string, updates: Partial<MedicalProfile>):
 		throw new Error(`Profile not found for user ${userId}`);
 	}
 
+	// Filter updates to only allowed fields to prevent injection
+	const filteredUpdates: any = {};
+	for (const key of Object.keys(updates)) {
+		if (ALLOWED_PROFILE_FIELDS.includes(key)) {
+			filteredUpdates[key] = (updates as any)[key];
+		}
+	}
+
 	const updated: MedicalProfile = {
 		...current,
-		...updates,
+		...filteredUpdates,
 		userId, // Ensure userId is preserved
 		updatedAt: now(),
 	};
@@ -249,13 +300,20 @@ export async function breathe(
 	}
 }
 
-function applyPatches(profile: MedicalProfile, patches: ProfilePatch[]): string[] {
+function applyPatches(profile: MedicalProfile, patches: ProfileDiff['patches']): string[] {
 	const updatedFields = new Set<string>();
 
 	for (const patch of patches) {
 		if (patch.confidence < PROFILE_MIN_CONFIDENCE) continue;
 
 		const field = patch.field as keyof Omit<MedicalProfile, 'userId' | 'updatedAt'>;
+		
+		// Strict field check
+		if (!ALLOWED_PROFILE_FIELDS.includes(field)) {
+			logger.warn(`applyPatches: rejected invalid field "${field}"`);
+			continue;
+		}
+
 		const currentValue = profile[field];
 		const patchValue = patch.value as any;
 
@@ -282,6 +340,7 @@ function applyPatches(profile: MedicalProfile, patches: ProfilePatch[]): string[
 			(profile[field] as any[]) = currentValue.filter((item: any) => item.id !== patchValue.id);
 			updatedFields.add(field);
 		} else if (patch.operation === 'add' || patch.operation === 'update') {
+			// Ensure we are adding/updating a top-level field that exists in the profile record
 			(profile[field] as any) = patchValue;
 			updatedFields.add(field);
 		}

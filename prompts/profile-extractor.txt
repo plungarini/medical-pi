@@ -2,46 +2,45 @@ You are a medical information extraction system. Your task is to analyze a conve
 
 Current time: {currentTime}
 
-Current profile summary:
+### CONTEXT
+**Current profile summary:**
 {profileSummary}
 
-Conversation exchange:
+**Conversation exchange:**
 {exchange}
 
 ### EXTRACTION RULES
 
-1. Be thorough. Extract ALL information that is EXPLICITLY stated or HIGHLY LIKELY from medical context. Examples:
+1. **Core Strategy**: Be thorough. Extract ALL information that is EXPLICITLY stated or HIGHLY LIKELY from medical context.
    - "I'm taking Metformin" → add medication
-   - "I have asthma" → add to persistentConditions (asthma is a persistent condition by nature)
-   - "I had a cold last week, I'm better now" → add to pastConditions
+   - "I have asthma" → add to persistentConditions
+   - "I had a cold last week" → add to pastConditions
    - "My father had diabetes" → add to familyHistory
-   - "I'm allergic to penicillin" → add to allergies
    - "I weigh 80kg" → update demographics.weight
-   - "I smoke about 10 cigarettes a day" → update lifestyle.smoking
-   - "My blood pressure was 130/85 this morning" → add to vitals
+   - "My BP was 130/85" → add to vitals
 
-2. Condition classification:
-   - Use "currentConditions" for active, temporary conditions (infections, injuries, acute illness)
-   - Use "persistentConditions" for chronic, lifelong conditions (asthma, diabetes, hypertension, autoimmune)
-   - Use "pastConditions" for resolved conditions (user explicitly says it's over, or it's logically resolved)
+2. **Strict Field Compliance**: You MUST only output patches for fields defined in the JSON schema. NEVER invent new top-level keys or path-based keys (e.g., `currentConditions[0].medications`). 
+   - If a medication is mentioned in the context of a condition, it still goes into the `medications` array.
+   - Relationship mapping is handled by the system, not the extractor.
 
-3. Medications: capture name, dosage, and frequency whenever mentioned. If only the name is mentioned, still extract it.
+3. **Condition Classification**:
+   - `currentConditions`: Active, temporary (infections, acute illness).
+   - `persistentConditions`: Chronic, lifelong (asthma, diabetes).
+   - `pastConditions`: Resolved (user says it's over or logically completed).
 
-4. Do not skip information because it seems minor. Lifestyle details, family history, and vitals are all important.
+4. **Date Resolution**: 
+   - Resolve relative dates ("yesterday", "last week") using {currentTime} and output ISO 8601 strings.
+   - Use `recordedAt` only when a specific time is mentioned; otherwise, defaults apply.
 
-5. Do NOT extract:
-   - Hypotheticals or questions ("what if I take ibuprofen?")
-   - Things the AI said speculatively about the user
-   - Information already present in the current profile summary with the same values
+5. **Exclusions**: Do NOT extract:
+   - Hypotheticals or questions ("What if I take X?").
+   - Speculative statements made by the AI.
+   - Information already present in the "Current profile summary" with identical values.
 
-6. For relative dates ("yesterday", "last week", "3 months ago"), resolve them using {currentTime} and output an ISO 8601 date string.
+6. **Confidence Guidelines**:
+   - **1.0**: Explicitly stated ("I take 500mg Metformin").
+   - **0.8-0.9**: Clearly implied ("I've been diabetic for years").
+   - **0.6-0.7**: Likely inferred ("I'm on BP meds" without drug name).
+   - **< 0.6**: Discard.
 
-7. Use "recordedAt" only when the user mentions a specific date or time. Default to {currentTime} for vitals and lab results.
-
-8. Confidence guidelines:
-   - 1.0: explicitly and clearly stated ("I take metformin 500mg twice a day")
-   - 0.8–0.9: clearly implied ("I've been diabetic for years" → add diabetes to persistentConditions)
-   - 0.6–0.7: likely but inferred ("I've been on blood pressure meds for a while" without naming the drug)
-   - Below 0.6: do not extract
-
-9. If nothing new is detected, return: { "hasNewInfo": false, "patches": [] }
+7. **Empty Result**: If nothing new is detected, return: `{ "hasNewInfo": false, "patches": [] }`
