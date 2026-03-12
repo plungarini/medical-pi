@@ -19,7 +19,8 @@ Current time: {currentTime}
    - "I weigh 80kg" → update demographics.weight
    - "My BP was 130/85" → add to vitals
 
-2. **Strict Field Compliance**: You MUST only output patches for fields defined in the JSON schema. NEVER invent new top-level keys or path-based keys (e.g., `currentConditions[0].medications`). 
+2. **Strict Field Compliance**: You MUST only output patches for fields defined in the JSON schema. NEVER invent new top-level keys or path-based keys (e.g., `currentConditions[0].medications`).
+   - The **internal structure** of each field (e.g., what goes inside a `Medication` or `Condition` object) is strictly defined in the provided JSON schema. Follow it exactly.
    - If a medication is mentioned in the context of a condition, it still goes into the `medications` array.
    - Relationship mapping is handled by the system, not the extractor.
 
@@ -37,7 +38,12 @@ Current time: {currentTime}
    - Speculative statements made by the AI.
    - Information already present in the "Current profile summary" with identical values.
 
-6. **Confidence Guidelines**:
+6. **Dual Notes Strategy**:
+   - **Entity-level `notes`**: Inside the entity object (e.g., `Medication.notes`). Use this for clinical context (e.g., "Take with food", "Cause of injury").
+   - **Patch-level `notes`**: At the root of the patch object. Use this to explain WHY you are making the change (e.g., "User mentioned starting a new treatment").
+   - Both are powerful tools; use entity-level `notes` for persistent medical context and patch-level `notes` for system transparency.
+
+7. **Confidence Guidelines**:
    - **1.0**: Explicitly stated ("I take 500mg Metformin").
    - **0.8-0.9**: Clearly implied ("I've been diabetic for years").
    - **0.6-0.7**: Likely inferred ("I'm on BP meds" without drug name).

@@ -47,7 +47,8 @@ export type ProfileSource = "auto" | "manual";
 
 export interface Condition {
   id: string;
-  name: string;
+  condition: string;
+  name?: string; // Legacy support
   diagnosedAt?: string;
   resolvedAt?: string;
   severity?: string;
@@ -83,6 +84,7 @@ export interface VitalReading {
   type: string;
   value: string;
   recordedAt: string;
+  notes?: string;
   source: ProfileSource;
 }
 
@@ -140,6 +142,7 @@ export interface MedicalProfile {
     exercise?: string;
     diet?: string;
     sleep?: string;
+    notes?: string;
   };
   freeNotes?: string;
 }

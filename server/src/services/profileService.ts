@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { generateId, now, queries } from '../core/db.js';
 import { logger } from '../core/logger.js';
 import { jsonCompletion } from '../core/openrouterClient.js';
-import type { MedicalProfile, ProfileDiff, ProfileHistoryEntry, ProfilePatch } from '../types/index.js';
+import type { MedicalProfile, ProfileDiff, ProfileHistoryEntry } from '../types/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -32,18 +32,177 @@ const PROFILE_EXTRACTOR_PROMPT = fs.readFileSync(
 	'utf-8',
 );
 
+// Sub-schemas for medical entities
+const ConditionSchema = z.object({
+	condition: z.string().describe('Name of the condition (e.g., "Reflux", "Asthma")'),
+	name: z.string().optional().describe('Alias for condition'),
+	diagnosedAt: z.string().optional().describe('ISO date or year of diagnosis'),
+	resolvedAt: z.string().optional().describe('ISO date or year when resolved'),
+	severity: z.string().optional().describe('Severity level (e.g., "mild", "moderate", "severe")'),
+	notes: z.string().optional().describe('Additional notes or details about the condition'),
+});
+
+const MedicationSchema = z.object({
+	name: z.string().describe('Name of the medication'),
+	dosage: z.string().optional().describe('Dosage (e.g., "500mg")'),
+	frequency: z.string().optional().describe('Frequency (e.g., "once daily", "as needed")'),
+	startedAt: z.string().optional().describe('ISO date or year started'),
+	notes: z.string().optional().describe('Additional notes about the medication'),
+});
+
+const AllergySchema = z.object({
+	substance: z.string().describe('Substance the user is allergic to'),
+	reaction: z.string().optional().describe('Type of allergic reaction'),
+	severity: z.string().optional().describe('Severity of the allergy'),
+	notes: z.string().optional().describe('Additional context for the allergy'),
+});
+
+const VitalReadingSchema = z.object({
+	type: z.string().describe('Type of vital (e.g., "Blood Pressure", "Heart Rate", "Weight")'),
+	value: z.string().describe('The value recorded'),
+	notes: z.string().optional().describe('Any context for the measurement'),
+});
+
+const LabResultSchema = z.object({
+	name: z.string().describe('Name of the lab test'),
+	value: z.string().describe('The resulting value'),
+	unit: z.string().optional().describe('Unit of measurement'),
+	referenceRange: z.string().optional().describe('Standard reference range'),
+	notes: z.string().optional().describe('Additional notes about the result or its interpretation'),
+});
+
+const SurgerySchema = z.object({
+	name: z.string().describe('Name of the surgical procedure'),
+	date: z.string().optional().describe('ISO date or year of the surgery'),
+	notes: z.string().optional().describe('Details or complications of the surgery'),
+});
+
+const FamilyConditionSchema = z.object({
+	relation: z.string().describe('Family member relation (e.g., "Father", "Maternal Grandmother")'),
+	condition: z.string().describe('The medical condition they had'),
+	notes: z.string().optional().describe('Notes on severity or age of onset in the family member'),
+});
+
+const DemographicsSchema = z.object({
+	dateOfBirth: z.string().optional(),
+	sex: z.string().optional(),
+	height: z.string().optional(),
+	weight: z.string().optional(),
+	bloodType: z.string().optional(),
+	notes: z.string().optional(),
+});
+
+const LifestyleSchema = z.object({
+	smoking: z.string().optional(),
+	alcohol: z.string().optional(),
+	exercise: z.string().optional(),
+	diet: z.string().optional(),
+	sleep: z.string().optional(),
+	notes: z.string().optional(),
+});
+
 // Zod schema for profile diff validation
 export const ProfileDiffSchema = z.object({
 	hasNewInfo: z.boolean(),
 	patches: z.array(
-		z.object({
-			field: z.enum(ALLOWED_PROFILE_FIELDS as [string, ...string[]]),
-			operation: z.enum(['add', 'update', 'remove']),
-			confidence: z.number().min(0).max(1),
-			value: z.unknown(),
-			notes: z.string(),
-			recordedAt: z.string().optional(),
-		}),
+		z.discriminatedUnion('field', [
+			z.object({
+				field: z.literal('demographics'),
+				operation: z.enum(['update']),
+				confidence: z.number().min(0).max(1),
+				value: DemographicsSchema,
+				notes: z.string(),
+				recordedAt: z.string().optional(),
+			}),
+			z.object({
+				field: z.literal('currentConditions'),
+				operation: z.enum(['add', 'update', 'remove']),
+				confidence: z.number().min(0).max(1),
+				value: ConditionSchema,
+				notes: z.string(),
+				recordedAt: z.string().optional(),
+			}),
+			z.object({
+				field: z.literal('persistentConditions'),
+				operation: z.enum(['add', 'update', 'remove']),
+				confidence: z.number().min(0).max(1),
+				value: ConditionSchema,
+				notes: z.string(),
+				recordedAt: z.string().optional(),
+			}),
+			z.object({
+				field: z.literal('pastConditions'),
+				operation: z.enum(['add', 'update', 'remove']),
+				confidence: z.number().min(0).max(1),
+				value: ConditionSchema,
+				notes: z.string(),
+				recordedAt: z.string().optional(),
+			}),
+			z.object({
+				field: z.literal('medications'),
+				operation: z.enum(['add', 'update', 'remove']),
+				confidence: z.number().min(0).max(1),
+				value: MedicationSchema,
+				notes: z.string(),
+				recordedAt: z.string().optional(),
+			}),
+			z.object({
+				field: z.literal('allergies'),
+				operation: z.enum(['add', 'update', 'remove']),
+				confidence: z.number().min(0).max(1),
+				value: AllergySchema,
+				notes: z.string(),
+				recordedAt: z.string().optional(),
+			}),
+			z.object({
+				field: z.literal('vitals'),
+				operation: z.enum(['add', 'update', 'remove']),
+				confidence: z.number().min(0).max(1),
+				value: VitalReadingSchema,
+				notes: z.string(),
+				recordedAt: z.string().optional(),
+			}),
+			z.object({
+				field: z.literal('labResults'),
+				operation: z.enum(['add', 'update', 'remove']),
+				confidence: z.number().min(0).max(1),
+				value: LabResultSchema,
+				notes: z.string(),
+				recordedAt: z.string().optional(),
+			}),
+			z.object({
+				field: z.literal('surgeries'),
+				operation: z.enum(['add', 'update', 'remove']),
+				confidence: z.number().min(0).max(1),
+				value: SurgerySchema,
+				notes: z.string(),
+				recordedAt: z.string().optional(),
+			}),
+			z.object({
+				field: z.literal('familyHistory'),
+				operation: z.enum(['add', 'update', 'remove']),
+				confidence: z.number().min(0).max(1),
+				value: FamilyConditionSchema,
+				notes: z.string(),
+				recordedAt: z.string().optional(),
+			}),
+			z.object({
+				field: z.literal('lifestyle'),
+				operation: z.enum(['update']),
+				confidence: z.number().min(0).max(1),
+				value: LifestyleSchema,
+				notes: z.string(),
+				recordedAt: z.string().optional(),
+			}),
+			z.object({
+				field: z.literal('freeNotes'),
+				operation: z.enum(['update']),
+				confidence: z.number().min(0).max(1),
+				value: z.string(),
+				notes: z.string(),
+				recordedAt: z.string().optional(),
+			}),
+		]),
 	),
 });
 
@@ -252,8 +411,8 @@ export async function breathe(
 
 		// Apply patches
 		const updatedProfile: MedicalProfile = { ...profile };
-		// Apply patches
-		const updatedFields = applyPatches(updatedProfile, diff.patches as ProfilePatch[]);
+		const patches = diff.patches as any[]; // Type cast for iteration
+		const updatedFields = applyPatches(updatedProfile, patches);
 
 		if (updatedFields.length === 0) return logger.debug(`breathe: no updates for user ${userId}`);
 
@@ -307,44 +466,76 @@ function applyPatches(profile: MedicalProfile, patches: ProfileDiff['patches']):
 		if (patch.confidence < PROFILE_MIN_CONFIDENCE) continue;
 
 		const field = patch.field as keyof Omit<MedicalProfile, 'userId' | 'updatedAt'>;
-		
+
 		// Strict field check
 		if (!ALLOWED_PROFILE_FIELDS.includes(field)) {
 			logger.warn(`applyPatches: rejected invalid field "${field}"`);
 			continue;
 		}
 
-		const currentValue = profile[field];
-		const patchValue = patch.value as any;
-
-		if (patch.operation === 'add' && Array.isArray(currentValue)) {
-			const newItem = {
-				...patchValue,
-				id: generateId(),
-				source: 'auto',
-				confidence: patch.confidence,
-				notes: patch.notes,
-				recordedAt: patch.recordedAt || now(),
-			};
-			(profile[field] as any[]) = [...currentValue, newItem];
-			updatedFields.add(field);
-		} else if (patch.operation === 'update' && Array.isArray(currentValue)) {
-			const itemIndex = currentValue.findIndex((item: any) => item.id === patchValue.id);
-			if (itemIndex >= 0) {
-				const updatedArray = [...currentValue];
-				updatedArray[itemIndex] = { ...updatedArray[itemIndex], ...patchValue };
-				(profile[field] as any[]) = updatedArray;
-				updatedFields.add(field);
-			}
-		} else if (patch.operation === 'remove' && Array.isArray(currentValue)) {
-			(profile[field] as any[]) = currentValue.filter((item: any) => item.id !== patchValue.id);
-			updatedFields.add(field);
-		} else if (patch.operation === 'add' || patch.operation === 'update') {
-			// Ensure we are adding/updating a top-level field that exists in the profile record
-			(profile[field] as any) = patchValue;
+		if (processPatch(profile, field, patch)) {
 			updatedFields.add(field);
 		}
 	}
 
 	return Array.from(updatedFields);
+}
+
+/**
+ * Processes a single patch on the profile.
+ * Returns true if the field was updated.
+ */
+function processPatch(profile: MedicalProfile, field: keyof Omit<MedicalProfile, 'userId' | 'updatedAt'>, patch: ProfileDiff['patches'][0]): boolean {
+	const currentValue = profile[field];
+	const patchValue = patch.value as any;
+
+	if (Array.isArray(currentValue)) {
+		return processArrayPatch(profile, field, currentValue, patch, patchValue);
+	}
+
+	// Handle top-level object update (demographics, lifestyle, freeNotes)
+	if (patch.operation === 'add' || patch.operation === 'update') {
+		(profile[field] as any) = patchValue;
+		return true;
+	}
+
+	return false;
+}
+
+function processArrayPatch(
+	profile: MedicalProfile,
+	field: keyof Omit<MedicalProfile, 'userId' | 'updatedAt'>,
+	currentValue: any[],
+	patch: ProfileDiff['patches'][0],
+	patchValue: any,
+): boolean {
+	if (patch.operation === 'add') {
+		const newItem = {
+			...patchValue,
+			id: generateId(),
+			source: 'auto',
+			confidence: patch.confidence,
+			notes: patchValue.notes || patch.notes, // Prefer entity-specific notes if provided
+			recordedAt: patch.recordedAt || now(),
+		};
+		(profile[field] as any[]) = [...currentValue, newItem];
+		return true;
+	}
+
+	if (patch.operation === 'update') {
+		const itemIndex = currentValue.findIndex((item: any) => item.id === patchValue.id);
+		if (itemIndex >= 0) {
+			const updatedArray = [...currentValue];
+			updatedArray[itemIndex] = { ...updatedArray[itemIndex], ...patchValue };
+			(profile[field] as any[]) = updatedArray;
+			return true;
+		}
+	}
+
+	if (patch.operation === 'remove') {
+		(profile[field] as any[]) = currentValue.filter((item: any) => item.id !== patchValue.id);
+		return true;
+	}
+
+	return false;
 }
