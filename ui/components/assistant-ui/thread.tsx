@@ -252,9 +252,11 @@ const ProfileUpdatedBadge: FC = () => {
 	const metadata = (message as any).metadata;
 	if (!metadata?.profile_updated) return null;
 
-	const updatedFields = (metadata.updated_fields || []).map(
-		(f: string) => FIELD_LABELS[f] || f,
-	);
+	const updatedFields = (metadata.updated_fields || []).map((f: string) => {
+		const baseField = f.split('[')[0].split('.')[0];
+		return FIELD_LABELS[baseField] || f;
+	});
+	const uniqueFields = Array.from(new Set(updatedFields));
 
 	return (
 		<Tooltip>
@@ -270,7 +272,7 @@ const ProfileUpdatedBadge: FC = () => {
 			<TooltipContent side="bottom" align="start" className="max-w-xs">
 				<p className="font-medium mb-1 border-b border-white/10 pb-1">Health profile updated</p>
 				<p className="text-muted-foreground leading-normal">
-					New information about <span className="font-medium text-foreground">{updatedFields.join(', ')}</span>{' '}
+					New information about <span className="font-medium text-foreground">{uniqueFields.join(', ')}</span>{' '}
 					was saved to your medical record.
 				</p>
 			</TooltipContent>

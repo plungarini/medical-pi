@@ -243,7 +243,7 @@ export async function breathe(
 
 		// Emit live event
 		const { emitLiveEvent } = await import('./eventService.js');
-		emitLiveEvent(userId, 'profile_updated', { fields: updatedFields });
+		emitLiveEvent(userId, 'profile_updated', { fields: updatedFields, messageId: assistantMessageId });
 	} catch (error) {
 		logger.error(`breathe failed for user ${userId}`, error);
 	}
