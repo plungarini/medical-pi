@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import fs from "node:fs";
 
-const DB_PATH = process.env.DB_PATH || "/data/medical-pi/medical.db";
+const DB_PATH = process.env.DB_PATH || "./data/medical.db";
 
 // Ensure directory exists
 const dbDir = path.dirname(DB_PATH);
@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS messages (
   attachments TEXT NOT NULL DEFAULT '[]',
   tool_calls TEXT NOT NULL DEFAULT '[]',
   thinking_content TEXT NOT NULL DEFAULT '',
+  metadata TEXT NOT NULL DEFAULT '{}',
   created_at TEXT NOT NULL
 );
 
@@ -78,6 +79,16 @@ CREATE INDEX IF NOT EXISTS idx_profile_history_user ON profile_history(user_id, 
 
 database.exec(initSchema);
 
+// Migrate: Add metadata column to messages if missing
+try {
+  database.exec("ALTER TABLE messages ADD COLUMN metadata TEXT NOT NULL DEFAULT '{}'");
+  console.log("✅ Migrated messages table: added metadata column");
+} catch (e: any) {
+  if (!e.message.includes("duplicate column name")) {
+    throw e;
+  }
+}
+
 // Type for prepared statement
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PreparedStatement = Statement<unknown[]>;
@@ -106,6 +117,8 @@ export const queries: {
   getDocumentById: PreparedStatement;
   deleteDocument: PreparedStatement;
   updateDocumentContent: PreparedStatement;
+  updateMessageMetadata: PreparedStatement;
+  getMessageById: PreparedStatement;
 } = {
   // Users
   createUser: database.prepare("INSERT INTO users (id, username, created_at) VALUES (?, ?, ?)"),
@@ -130,7 +143,7 @@ export const queries: {
 
   // Messages
   createMessage: database.prepare(
-    "INSERT INTO messages (id, session_id, role, content, attachments, tool_calls, thinking_content, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+    "INSERT INTO messages (id, session_id, role, content, attachments, tool_calls, thinking_content, metadata, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
   ),
   getMessagesBySession: database.prepare(
     "SELECT * FROM messages WHERE session_id = ? ORDER BY created_at DESC LIMIT ?"
@@ -138,6 +151,10 @@ export const queries: {
   getMessagesBySessionAsc: database.prepare(
     "SELECT * FROM messages WHERE session_id = ? ORDER BY created_at ASC LIMIT ?"
   ),
+  updateMessageMetadata: database.prepare(
+    "UPDATE messages SET metadata = ? WHERE id = ?"
+  ),
+  getMessageById: database.prepare("SELECT * FROM messages WHERE id = ?"),
 
   // Medical Profiles
   getProfile: database.prepare("SELECT * FROM medical_profiles WHERE user_id = ?"),

@@ -55,11 +55,21 @@ function convertToAIStreamMessage(message: Message) {
     parts.push({ type: "text", text: content });
   }
 
+  let metadata = message.metadata as any;
+  if (typeof metadata === "string" && metadata.trim().startsWith("{")) {
+    try {
+      metadata = JSON.parse(metadata);
+    } catch (e) {
+      console.warn("[ChatRuntime] Failed to parse message metadata:", e);
+    }
+  }
+
   return {
     id: message.id,
     role: message.role as "user" | "assistant" | "system" | "data",
     content: content,
     parts,
+    metadata,
   };
 }
 

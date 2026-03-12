@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// API runs on PORT + 1000 (default 4003)
-const API_BASE = "http://127.0.0.1:4003";
-
 async function handleRequest(
   request: NextRequest,
   { params }: { params: Promise<{ path?: string[] }> }
@@ -10,9 +7,13 @@ async function handleRequest(
   const { path = [] } = await params;
   const pathString = path.join("/");
 
-  // Build the target URL
+  // Determine API base dynamically based on UI port (UI_PORT + 1000)
   const url = new URL(request.url);
-  const targetUrl = new URL(pathString + url.search, API_BASE);
+  const uiPort = Number.parseInt(url.port) || 3000; // Next.js default fallback is usually 3000
+  const apiBase = `http://127.0.0.1:${uiPort + 1000}`;
+
+  // Build the target URL
+  const targetUrl = new URL(pathString + url.search, apiBase);
   
   console.log(`[PROXY] ${request.method} ${request.url} -> ${targetUrl.toString()}`);
 

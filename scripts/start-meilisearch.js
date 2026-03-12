@@ -81,12 +81,12 @@ async function startMeilisearch() {
 
   const meiliProcess = spawn(binary, args, {
     stdio: "pipe",
-    detached: !IS_WINDOWS, // Detach on Unix so it doesn't die with parent
-    windowsHide: true,     // Hide window on Windows
+    detached: true, // Always detach so it can outlive the parent
+    windowsHide: true,
   });
 
   // Handle process events
-  meiliProcess.on("error", (err) => {
+  meiliProcess.on("error", (/** @type {NodeJS.ErrnoException} */ err) => {
     if (err.code === "ENOENT") {
       console.error("❌ Meilisearch binary not found!");
       console.error("   Run: npm run onboard");
@@ -97,7 +97,7 @@ async function startMeilisearch() {
     process.exit(1);
   });
 
-  meiliProcess.on("exit", (code) => {
+  meiliProcess.on("exit", (/** @type {number | null} */ code) => {
     if (code !== 0 && code !== null) {
       console.error(`❌ Meilisearch exited with code ${code}`);
       process.exit(1);
@@ -147,18 +147,18 @@ async function main() {
   // Start Meilisearch
   const process_ = await startMeilisearch();
 
-  // On Unix, we can detach and let it run independently
-  // On Windows, we need to keep the process reference
-  if (!IS_WINDOWS) {
-    process_.unref();
-  }
+  // Detach and exit starter
+  process_.unref();
 
   // Give it a moment to fully initialize
   await new Promise((r) => setTimeout(r, 1000));
   process.exit(0);
 }
 
-main().catch((err) => {
-  console.error("❌ Unexpected error:", err);
+try {
+  await main();
+} catch (err) {
+  const error = err instanceof Error ? err : new Error(String(err));
+  console.error("❌ Unexpected error:", error.message);
   process.exit(1);
-});
+}

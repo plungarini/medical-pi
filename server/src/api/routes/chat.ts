@@ -6,11 +6,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { logger } from '../../core/logger.js';
 import { createMessage, getRecentMessages } from '../../services/chatService.js';
-import { getProfile } from '../../services/profileService.js';
+import { getProfile, breathe } from '../../services/profileService.js';
 import { createSession } from '../../services/sessionService.js';
+import { generateAndSave } from '../../services/titleService.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const SYSTEM_PROMPT = fs.readFileSync(path.join(__dirname, '../../../prompts/system.txt'), 'utf-8');
+const SYSTEM_PROMPT = fs.readFileSync(path.join(__dirname, '../../../../prompts/system.txt'), 'utf-8');
 const CONTEXT_LIMIT = Number.parseInt(process.env.CONTEXT_MESSAGE_LIMIT ?? '20', 10);
 
 const MODAL_ENDPOINT = process.env.MODAL_ENDPOINT;
@@ -203,12 +204,26 @@ export default async function chatRoutes(fastify: FastifyInstance) {
 							if (part.type === 'finish') {
 								try {
 									const fullText = await result.text;
-									createMessage({
+									const assistantMsg = createMessage({
 										sessionId: sessionId,
 										role: 'assistant',
 										content: fullText,
 									});
-									logger.info(`[CHAT] Persisted assistant message for session ${sessionId}`);
+									logger.info(`[CHAT] Persisted assistant message ${assistantMsg.id} for session ${sessionId}`);
+
+									// 3. Fire-and-forget: Breathing Profile
+									void breathe(request.user!.userId, userMessage, fullText, assistantMsg.id).catch((err) =>
+										logger.error(`[CHAT] breathe failed for ${sessionId}`, err),
+									);
+
+									// 4. Fire-and-forget: Title Generation (on first exchange)
+									const { prepare } = await import('../../core/db.js');
+									const row = prepare('SELECT message_count FROM sessions WHERE id = ?').get(sessionId) as any;
+									if (row && row.message_count <= 2) {
+										void generateAndSave(sessionId).catch((err) =>
+											logger.error(`[CHAT] title generation failed for ${sessionId}`, err),
+										);
+									}
 								} catch (err) {
 									logger.error(`[CHAT] Failed to persist AI message for ${sessionId}`, err);
 								}

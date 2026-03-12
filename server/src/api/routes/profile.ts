@@ -4,6 +4,7 @@ import {
   updateProfile,
   getProfileHistory,
   deleteProfileEntry,
+  updateProfileEntry,
 } from "../../services/profileService.js";
 import { logger } from "../../core/logger.js";
 
@@ -76,6 +77,23 @@ export default async function profileRoutes(fastify: FastifyInstance) {
     } catch (error) {
       logger.error("Delete profile entry error", error);
       reply.status(500).send({ error: "Failed to delete profile entry" });
+    }
+  });
+
+  // PATCH /profile/entry/:field/:id
+  fastify.patch("/entry/:field/:id", async (request, reply) => {
+    if (!request.user) {
+      reply.status(401).send({ error: "Unauthorized" });
+      return;
+    }
+    const { field, id } = request.params as { field: string; id: string };
+    const updates = request.body as Record<string, unknown>;
+    try {
+      updateProfileEntry(request.user.userId, field, id, updates);
+      reply.status(204).send();
+    } catch (error) {
+      logger.error("Update profile entry error", error);
+      reply.status(500).send({ error: "Failed to update profile entry" });
     }
   });
 }

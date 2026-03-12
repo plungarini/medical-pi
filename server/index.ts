@@ -3,6 +3,7 @@ import "./src/core/env.js";
 
 import { startServer } from "./src/api/server.js";
 import { logger } from "./src/core/logger.js";
+import { startHeartbeatJobs } from "./src/services/heartbeatService.js";
 
 // Debug: log process events
 process.on("exit", (code) => {
@@ -23,6 +24,7 @@ process.on("unhandledRejection", (reason) => {
 try {
   await startServer();
   logger.info("Server started successfully - KEEPALIVE");
+  startHeartbeatJobs();
 } catch (error) {
   logger.error("Failed to start server", error);
   console.error("Fatal error starting server:", error);

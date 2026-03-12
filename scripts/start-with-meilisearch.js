@@ -8,7 +8,6 @@
  */
 
 import { spawn, exec } from "node:child_process";
-import { existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import os from "node:os";
@@ -27,13 +26,22 @@ const YELLOW = "\x1b[33m";
 const RED = "\x1b[31m";
 const RESET = "\x1b[0m";
 
+/**
+ * @param {string} service 
+ * @param {string} message 
+ */
 function log(service, message) {
-  const color = service === "UI" ? CYAN : service === "API" ? GREEN : service === "ERROR" ? RED : YELLOW;
+  let color = YELLOW;
+  if (service === "UI") color = CYAN;
+  else if (service === "API") color = GREEN;
+  else if (service === "ERROR") color = RED;
+  
   console.log(`${color}[${service}]${RESET} ${message}`);
 }
 
 /**
  * Check if a port is in use
+ * @param {number} port
  */
 async function isPortInUse(port) {
   try {
@@ -51,41 +59,51 @@ async function isPortInUse(port) {
 
 /**
  * Kill process using a port
+ * @param {number} port
  */
 async function killProcessOnPort(port) {
   try {
-    if (IS_WINDOWS) {
-      // Find PID using the port and kill it
-      const { stdout } = await execAsync(`for /f "tokens=5" %a in ('netstat -ano ^| findstr ":${port}" ^| findstr "LISTENING"') do @echo %a`);
-      const pids = stdout.trim().split('\n').filter(pid => pid.trim());
-      for (const pid of pids) {
-        if (pid && !isNaN(parseInt(pid))) {
-          try {
-            await execAsync(`taskkill /F /PID ${pid} 2>nul`);
-            log("MAIN", `Killed process ${pid} using port ${port}`);
-          } catch {
-            // Ignore errors
-          }
-        }
-      }
-    } else {
-      const { stdout } = await execAsync(`lsof -i :${port} -t 2>/dev/null`);
-      const pids = stdout.trim().split('\n').filter(pid => pid.trim());
-      for (const pid of pids) {
-        if (pid) {
-          try {
-            await execAsync(`kill -9 ${pid} 2>/dev/null`);
-            log("MAIN", `Killed process ${pid} using port ${port}`);
-          } catch {
-            // Ignore errors
-          }
-        }
+    const pids = await getPidsOnPort(port);
+    for (const pid of pids) {
+      if (pid && !Number.isNaN(Number.parseInt(pid, 10))) {
+        await killPid(pid, port);
       }
     }
     // Wait a moment for the port to be released
     await new Promise(r => setTimeout(r, 1000));
   } catch {
     // Port might not be in use
+  }
+}
+
+/**
+ * @param {number} port
+ * @returns {Promise<string[]>}
+ */
+async function getPidsOnPort(port) {
+  if (IS_WINDOWS) {
+    const { stdout } = await execAsync(`for /f "tokens=5" %a in ('netstat -ano ^| findstr ":${port}" ^| findstr "LISTENING"') do @echo %a`);
+    return stdout.trim().split('\n').filter(pid => pid.trim());
+  } else {
+    const { stdout } = await execAsync(`lsof -i :${port} -t 2>/dev/null`);
+    return stdout.trim().split('\n').filter(pid => pid.trim());
+  }
+}
+
+/**
+ * @param {string} pid
+ * @param {number} port
+ */
+async function killPid(pid, port) {
+  try {
+    if (IS_WINDOWS) {
+      await execAsync(`taskkill /F /PID ${pid} 2>nul`);
+    } else {
+      await execAsync(`kill -9 ${pid} 2>/dev/null`);
+    }
+    log("MAIN", `Killed process ${pid} using port ${port}`);
+  } catch {
+    // Ignore errors
   }
 }
 
@@ -135,6 +153,11 @@ async function startMeilisearch() {
 
 /**
  * Start a service and return the process
+ * @param {string} name
+ * @param {string} command
+ * @param {string[]} args
+ * @param {string} [cwd]
+ * @param {NodeJS.ProcessEnv} [env]
  */
 function startService(name, command, args, cwd, env = process.env) {
   log(name, `Starting: ${command} ${args.join(" ")}`);
@@ -168,7 +191,7 @@ async function main() {
   console.log("╚════════════════════════════════════════════════════════╝\n");
 
   // Get port info
-  const PORT = parseInt(process.env.PORT || "3003", 10);
+  const PORT = Number.parseInt(process.env.PORT || "3003", 10);
   const API_PORT = PORT + 1000;
 
   // Check and cleanup ports before starting
@@ -188,7 +211,8 @@ async function main() {
   try {
     await startMeilisearch();
   } catch (err) {
-    console.error("❌ Failed to start Meilisearch:", err.message);
+    const error = err instanceof Error ? err : new Error(String(err));
+    console.error("❌ Failed to start Meilisearch:", error.message);
     process.exit(1);
   }
 
@@ -208,17 +232,22 @@ async function main() {
   const uiEnv = { ...process.env, PORT: String(PORT) };
   const uiProc = startService("UI", "node", [join(ROOT_DIR, "node_modules/next/dist/bin/next"), "start"], join(ROOT_DIR, "ui"), uiEnv);
 
-  // Handle graceful shutdown
+  /**
+   * Handle graceful shutdown
+   * @param {string} signal
+   */
   const shutdown = (signal) => {
     console.log(`\n${YELLOW}[MAIN]${RESET} Received ${signal}, shutting down...`);
     
-    if (!IS_WINDOWS) {
-      apiProc.kill(signal);
-      uiProc.kill(signal);
-    } else {
+    if (IS_WINDOWS) {
       // Windows needs different handling
       apiProc.kill();
       uiProc.kill();
+    } else {
+      /** @type {NodeJS.Signals} */
+      const s = /** @type {any} */ (signal);
+      apiProc.kill(s);
+      uiProc.kill(s);
     }
     
     setTimeout(() => process.exit(0), 2000);
@@ -231,7 +260,10 @@ async function main() {
   process.stdin.resume();
 }
 
-main().catch((err) => {
-  console.error("❌ Startup failed:", err);
+try {
+  await main();
+} catch (err) {
+  const error = err instanceof Error ? err : new Error(String(err));
+  console.error("❌ Startup failed:", error.message);
   process.exit(1);
-});
+}

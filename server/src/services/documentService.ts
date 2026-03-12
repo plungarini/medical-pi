@@ -4,7 +4,7 @@ import type { MedicalDocument } from "../types/index.js";
 import fs from "node:fs";
 import path from "node:path";
 
-const BASE_STORAGE_PATH = process.env.BASE_STORAGE_PATH ?? "/data/medical-pi";
+const BASE_STORAGE_PATH = process.env.BASE_STORAGE_PATH ?? "./data";
 const DOCUMENTS_PATH = path.join(BASE_STORAGE_PATH, "documents");
 
 // Ensure documents directory exists
