@@ -38,6 +38,7 @@ export interface Message {
   attachments: Attachment[];
   toolCalls: ToolCall[];
   thinkingContent: string;
+  metadata: Record<string, any>;
   createdAt: string;
 }
 

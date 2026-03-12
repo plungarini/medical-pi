@@ -204,15 +204,15 @@ export default async function chatRoutes(fastify: FastifyInstance) {
 							if (part.type === 'finish') {
 								try {
 									const fullText = await result.text;
-									createMessage({
+									const assistantMsg = createMessage({
 										sessionId: sessionId,
 										role: 'assistant',
 										content: fullText,
 									});
-									logger.info(`[CHAT] Persisted assistant message for session ${sessionId}`);
+									logger.info(`[CHAT] Persisted assistant message ${assistantMsg.id} for session ${sessionId}`);
 
 									// 3. Fire-and-forget: Breathing Profile
-									void breathe(request.user!.userId, userMessage, fullText).catch((err) =>
+									void breathe(request.user!.userId, userMessage, fullText, assistantMsg.id).catch((err) =>
 										logger.error(`[CHAT] breathe failed for ${sessionId}`, err),
 									);
 

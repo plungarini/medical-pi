@@ -9,6 +9,7 @@ export interface CreateMessageInput {
   attachments?: Attachment[];
   toolCalls?: Array<{ id: string; name: string; args: Record<string, unknown>; result?: unknown }>;
   thinkingContent?: string;
+  metadata?: Record<string, any>;
 }
 
 export function createMessage(input: CreateMessageInput): Message {
@@ -23,6 +24,7 @@ export function createMessage(input: CreateMessageInput): Message {
     JSON.stringify(input.attachments ?? []),
     JSON.stringify(input.toolCalls ?? []),
     input.thinkingContent ?? "",
+    JSON.stringify(input.metadata ?? {}),
     createdAt,
   ]);
 
@@ -37,6 +39,7 @@ export function createMessage(input: CreateMessageInput): Message {
     attachments: input.attachments ?? [],
     toolCalls: input.toolCalls ?? [],
     thinkingContent: input.thinkingContent ?? "",
+    metadata: input.metadata ?? {},
     createdAt,
   };
 
@@ -57,6 +60,7 @@ export function getMessagesBySession(sessionId: string, limit = 50): Message[] {
     attachments: string;
     tool_calls: string;
     thinking_content: string;
+    metadata: string;
     created_at: string;
   }>;
 
@@ -73,6 +77,7 @@ export function getMessagesBySession(sessionId: string, limit = 50): Message[] {
       result?: unknown;
     }>,
     thinkingContent: row.thinking_content,
+    metadata: JSON.parse(row.metadata || "{}") as Record<string, any>,
     createdAt: row.created_at,
   }));
 }
@@ -87,6 +92,7 @@ export function getRecentMessages(sessionId: string, limit = 20): Message[] {
     attachments: string;
     tool_calls: string;
     thinking_content: string;
+    metadata: string;
     created_at: string;
   }>;
 
@@ -106,6 +112,7 @@ export function getRecentMessages(sessionId: string, limit = 20): Message[] {
         result?: unknown;
       }>,
       thinkingContent: row.thinking_content,
+      metadata: JSON.parse(row.metadata || "{}") as Record<string, any>,
       createdAt: row.created_at,
     }));
 }

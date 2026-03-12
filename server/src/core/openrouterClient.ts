@@ -55,12 +55,23 @@ export async function completion(
 
 export async function jsonCompletion<T>(
   messages: ChatCompletionMessageParam[],
-  schema?: unknown,
+  schema?: any,
   options: Omit<CompletionOptions, "responseFormat"> = {}
 ): Promise<T> {
+  const responseFormat = schema 
+    ? { 
+        type: "json_schema", 
+        json_schema: {
+          name: "output", // required by OpenAI/OpenRouter
+          strict: true,
+          schema
+        }
+      } as ChatCompletionCreateParams["response_format"]
+    : { type: "json_object" } as ChatCompletionCreateParams["response_format"];
+
   let content = await completion(messages, {
     ...options,
-    responseFormat: schema ? (schema as ChatCompletionCreateParams["response_format"]) : { type: "json_object" },
+    responseFormat,
   });
 
   // Sanitization: strip markdown blocks

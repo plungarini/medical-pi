@@ -60,6 +60,7 @@ function convertToAIStreamMessage(message: Message) {
     role: message.role as "user" | "assistant" | "system" | "data",
     content: content,
     parts,
+    metadata: message.metadata,
   };
 }
 
