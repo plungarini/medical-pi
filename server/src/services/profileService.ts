@@ -35,70 +35,70 @@ const PROFILE_EXTRACTOR_PROMPT = fs.readFileSync(
 // Sub-schemas for medical entities
 const ConditionSchema = z.object({
 	condition: z.string().describe('Name of the condition (e.g., "Reflux", "Asthma")'),
-	name: z.string().optional().describe('Alias for condition'),
-	diagnosedAt: z.string().optional().describe('ISO date or year of diagnosis'),
-	resolvedAt: z.string().optional().describe('ISO date or year when resolved'),
-	severity: z.string().optional().describe('Severity level (e.g., "mild", "moderate", "severe")'),
-	notes: z.string().optional().describe('Additional notes or details about the condition'),
+	name: z.string().nullable().describe('Alias for condition'),
+	diagnosedAt: z.string().nullable().describe('ISO date or year of diagnosis'),
+	resolvedAt: z.string().nullable().describe('ISO date or year when resolved'),
+	severity: z.string().nullable().describe('Severity level (e.g., "mild", "moderate", "severe")'),
+	notes: z.string().nullable().describe('Additional notes or details about the condition'),
 });
 
 const MedicationSchema = z.object({
 	name: z.string().describe('Name of the medication'),
-	dosage: z.string().optional().describe('Dosage (e.g., "500mg")'),
-	frequency: z.string().optional().describe('Frequency (e.g., "once daily", "as needed")'),
-	startedAt: z.string().optional().describe('ISO date or year started'),
-	notes: z.string().optional().describe('Additional notes about the medication'),
+	dosage: z.string().nullable().describe('Dosage (e.g., "500mg")'),
+	frequency: z.string().nullable().describe('Frequency (e.g., "once daily", "as needed")'),
+	startedAt: z.string().nullable().describe('ISO date or year started'),
+	notes: z.string().nullable().describe('Additional notes about the medication'),
 });
 
 const AllergySchema = z.object({
 	substance: z.string().describe('Substance the user is allergic to'),
-	reaction: z.string().optional().describe('Type of allergic reaction'),
-	severity: z.string().optional().describe('Severity of the allergy'),
-	notes: z.string().optional().describe('Additional context for the allergy'),
+	reaction: z.string().nullable().describe('Type of allergic reaction'),
+	severity: z.string().nullable().describe('Severity of the allergy'),
+	notes: z.string().nullable().describe('Additional context for the allergy'),
 });
 
 const VitalReadingSchema = z.object({
 	type: z.string().describe('Type of vital (e.g., "Blood Pressure", "Heart Rate", "Weight")'),
 	value: z.string().describe('The value recorded'),
-	notes: z.string().optional().describe('Any context for the measurement'),
+	notes: z.string().nullable().describe('Any context for the measurement'),
 });
 
 const LabResultSchema = z.object({
 	name: z.string().describe('Name of the lab test'),
 	value: z.string().describe('The resulting value'),
-	unit: z.string().optional().describe('Unit of measurement'),
-	referenceRange: z.string().optional().describe('Standard reference range'),
-	notes: z.string().optional().describe('Additional notes about the result or its interpretation'),
+	unit: z.string().nullable().describe('Unit of measurement'),
+	referenceRange: z.string().nullable().describe('Standard reference range'),
+	notes: z.string().nullable().describe('Additional notes about the result or its interpretation'),
 });
 
 const SurgerySchema = z.object({
 	name: z.string().describe('Name of the surgical procedure'),
-	date: z.string().optional().describe('ISO date or year of the surgery'),
-	notes: z.string().optional().describe('Details or complications of the surgery'),
+	date: z.string().nullable().describe('ISO date or year of the surgery'),
+	notes: z.string().nullable().describe('Details or complications of the surgery'),
 });
 
 const FamilyConditionSchema = z.object({
 	relation: z.string().describe('Family member relation (e.g., "Father", "Maternal Grandmother")'),
 	condition: z.string().describe('The medical condition they had'),
-	notes: z.string().optional().describe('Notes on severity or age of onset in the family member'),
+	notes: z.string().nullable().describe('Notes on severity or age of onset in the family member'),
 });
 
 const DemographicsSchema = z.object({
-	dateOfBirth: z.string().optional(),
-	sex: z.string().optional(),
-	height: z.string().optional(),
-	weight: z.string().optional(),
-	bloodType: z.string().optional(),
-	notes: z.string().optional(),
+	dateOfBirth: z.string().nullable(),
+	sex: z.string().nullable(),
+	height: z.string().nullable(),
+	weight: z.string().nullable(),
+	bloodType: z.string().nullable(),
+	notes: z.string().nullable(),
 });
 
 const LifestyleSchema = z.object({
-	smoking: z.string().optional(),
-	alcohol: z.string().optional(),
-	exercise: z.string().optional(),
-	diet: z.string().optional(),
-	sleep: z.string().optional(),
-	notes: z.string().optional(),
+	smoking: z.string().nullable(),
+	alcohol: z.string().nullable(),
+	exercise: z.string().nullable(),
+	diet: z.string().nullable(),
+	sleep: z.string().nullable(),
+	notes: z.string().nullable(),
 });
 
 // Zod schema for profile diff validation
@@ -112,7 +112,7 @@ export const ProfileDiffSchema = z.object({
 				confidence: z.number().min(0).max(1),
 				value: DemographicsSchema,
 				notes: z.string(),
-				recordedAt: z.string().optional(),
+				recordedAt: z.string().nullable(),
 			}),
 			z.object({
 				field: z.literal('currentConditions'),
@@ -120,7 +120,7 @@ export const ProfileDiffSchema = z.object({
 				confidence: z.number().min(0).max(1),
 				value: ConditionSchema,
 				notes: z.string(),
-				recordedAt: z.string().optional(),
+				recordedAt: z.string().nullable(),
 			}),
 			z.object({
 				field: z.literal('persistentConditions'),
@@ -128,7 +128,7 @@ export const ProfileDiffSchema = z.object({
 				confidence: z.number().min(0).max(1),
 				value: ConditionSchema,
 				notes: z.string(),
-				recordedAt: z.string().optional(),
+				recordedAt: z.string().nullable(),
 			}),
 			z.object({
 				field: z.literal('pastConditions'),
@@ -136,7 +136,7 @@ export const ProfileDiffSchema = z.object({
 				confidence: z.number().min(0).max(1),
 				value: ConditionSchema,
 				notes: z.string(),
-				recordedAt: z.string().optional(),
+				recordedAt: z.string().nullable(),
 			}),
 			z.object({
 				field: z.literal('medications'),
@@ -144,7 +144,7 @@ export const ProfileDiffSchema = z.object({
 				confidence: z.number().min(0).max(1),
 				value: MedicationSchema,
 				notes: z.string(),
-				recordedAt: z.string().optional(),
+				recordedAt: z.string().nullable(),
 			}),
 			z.object({
 				field: z.literal('allergies'),
@@ -152,7 +152,7 @@ export const ProfileDiffSchema = z.object({
 				confidence: z.number().min(0).max(1),
 				value: AllergySchema,
 				notes: z.string(),
-				recordedAt: z.string().optional(),
+				recordedAt: z.string().nullable(),
 			}),
 			z.object({
 				field: z.literal('vitals'),
@@ -160,7 +160,7 @@ export const ProfileDiffSchema = z.object({
 				confidence: z.number().min(0).max(1),
 				value: VitalReadingSchema,
 				notes: z.string(),
-				recordedAt: z.string().optional(),
+				recordedAt: z.string().nullable(),
 			}),
 			z.object({
 				field: z.literal('labResults'),
@@ -168,7 +168,7 @@ export const ProfileDiffSchema = z.object({
 				confidence: z.number().min(0).max(1),
 				value: LabResultSchema,
 				notes: z.string(),
-				recordedAt: z.string().optional(),
+				recordedAt: z.string().nullable(),
 			}),
 			z.object({
 				field: z.literal('surgeries'),
@@ -176,7 +176,7 @@ export const ProfileDiffSchema = z.object({
 				confidence: z.number().min(0).max(1),
 				value: SurgerySchema,
 				notes: z.string(),
-				recordedAt: z.string().optional(),
+				recordedAt: z.string().nullable(),
 			}),
 			z.object({
 				field: z.literal('familyHistory'),
@@ -184,7 +184,7 @@ export const ProfileDiffSchema = z.object({
 				confidence: z.number().min(0).max(1),
 				value: FamilyConditionSchema,
 				notes: z.string(),
-				recordedAt: z.string().optional(),
+				recordedAt: z.string().nullable(),
 			}),
 			z.object({
 				field: z.literal('lifestyle'),
@@ -192,7 +192,7 @@ export const ProfileDiffSchema = z.object({
 				confidence: z.number().min(0).max(1),
 				value: LifestyleSchema,
 				notes: z.string(),
-				recordedAt: z.string().optional(),
+				recordedAt: z.string().nullable(),
 			}),
 			z.object({
 				field: z.literal('freeNotes'),
@@ -200,7 +200,7 @@ export const ProfileDiffSchema = z.object({
 				confidence: z.number().min(0).max(1),
 				value: z.string(),
 				notes: z.string(),
-				recordedAt: z.string().optional(),
+				recordedAt: z.string().nullable(),
 			}),
 		]),
 	),

@@ -49,4 +49,4 @@ Current time: {currentTime}
    - **0.6-0.7**: Likely inferred ("I'm on BP meds" without drug name).
    - **< 0.6**: Discard.
 
-7. **Empty Result**: If nothing new is detected, return: `{ "hasNewInfo": false, "patches": [] }`
+8. **Empty Result**: If nothing new is detected, return: `{ "hasNewInfo": false, "patches": [] }`

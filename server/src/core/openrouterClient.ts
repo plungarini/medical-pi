@@ -47,7 +47,7 @@ export async function completion(
     return response.choices[0]?.message?.content ?? "";
   } catch (error) {
     throw new OpenRouterError(
-      `OpenRouter API error: ${error instanceof Error ? error.message : String(error)}`,
+      `OpenRouter API error [Model: ${OPENROUTER_MODEL}, Schema: ${options.responseFormat?.type === 'json_schema' ? options.responseFormat.json_schema.name : 'none'}]: ${error instanceof Error ? error.message : String(error)}`,
       error
     );
   }
@@ -56,23 +56,75 @@ export async function completion(
 export async function jsonCompletion<T>(
   messages: ChatCompletionMessageParam[],
   schema?: any,
-  options: Omit<CompletionOptions, "responseFormat"> = {}
+  options: Omit<CompletionOptions, "responseFormat"> & { strict?: boolean } = {}
 ): Promise<T> {
-  const responseFormat = schema 
-    ? { 
-        type: "json_schema", 
+  const useStrict = options.strict ?? true;
+
+  const getResponseFormatBase = (strict: boolean): ChatCompletionCreateParams["response_format"] => {
+    if (schema) {
+      return {
+        type: "json_schema",
         json_schema: {
-          name: "output", // required by OpenAI/OpenRouter
-          strict: true,
+          name: "output",
+          strict: strict,
           schema
         }
-      } as ChatCompletionCreateParams["response_format"]
-    : { type: "json_object" } as ChatCompletionCreateParams["response_format"];
+      } as ChatCompletionCreateParams["response_format"];
+    }
+    return { type: "json_object" } as ChatCompletionCreateParams["response_format"];
+  };
 
-  let content = await completion(messages, {
-    ...options,
-    responseFormat,
-  });
+  const getMessagesWithSchema = (baseMessages: ChatCompletionMessageParam[]): ChatCompletionMessageParam[] => {
+    if (!schema) return baseMessages;
+    
+    const schemaPrompt = `\n\nCRITICAL: You MUST return a JSON object that adheres strictly to this JSON Schema:\n${JSON.stringify(schema, null, 2)}`;
+    
+    // Append to the last user message or add as a system message
+    const lastMsg = baseMessages[baseMessages.length - 1];
+    if (lastMsg && lastMsg.role === 'user') {
+      const newMessages = [...baseMessages];
+      const currentContent = lastMsg.content;
+      
+      let newContent: string | Array<any>;
+      if (typeof currentContent === 'string') {
+        newContent = currentContent + schemaPrompt;
+      } else if (Array.isArray(currentContent)) {
+        newContent = [...currentContent, { type: 'text', text: schemaPrompt }];
+      } else {
+        newContent = schemaPrompt;
+      }
+
+      newMessages[newMessages.length - 1] = {
+        ...lastMsg,
+        content: newContent
+      } as ChatCompletionMessageParam;
+      return newMessages;
+    }
+    
+    return [...baseMessages, { role: 'system', content: `Respond only in JSON matching this schema: ${JSON.stringify(schema)}` }];
+  };
+
+  let content: string;
+  try {
+    content = await completion(messages, {
+      ...options,
+      responseFormat: getResponseFormatBase(useStrict),
+    });
+  } catch (error) {
+    // If structured output (strict) fails with 400, try falling back to json_object
+    if (error instanceof OpenRouterError && (error as any).cause?.status === 400 && schema && useStrict) {
+      console.warn(`[OPENROUTER] Structured output (strict: true) failed with 400. Falling back to json_object mode with manual schema injection...`);
+      
+      const fallbackMessages = getMessagesWithSchema(messages);
+      
+      content = await completion(fallbackMessages, {
+        ...options,
+        responseFormat: { type: "json_object" } as ChatCompletionCreateParams["response_format"],
+      });
+    } else {
+      throw error;
+    }
+  }
 
   // Sanitization: strip markdown blocks
   if (content.includes("```")) {
@@ -86,8 +138,7 @@ export async function jsonCompletion<T>(
   // Sanitization: strip leading/trailing whitespace
   content = content.trim();
 
-  // Sanitization: strip potential trailing junk (like accidental comments or trailing characters)
-  // This is a basic safety net for models that might ignore the "no comments" rule
+  // Sanitization: strip potential trailing junk
   content = content.replaceAll(/\/\/.*/g, ""); // Remove // comments
   content = content.replaceAll(/\/\*[\s\S]*?\*\//g, ""); // Remove /* */ comments
 
