@@ -32,7 +32,9 @@ import {
 	Scissors,
 	Trash2,
 	Upload,
+	User,
 	Users,
+	FileText,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -68,6 +70,7 @@ export default function ProfilePage() {
 			toast.success('Entry deleted');
 			loadProfile();
 		} catch (error) {
+			console.error('Delete error:', error);
 			toast.error('Failed to delete entry');
 		}
 	};
@@ -79,6 +82,7 @@ export default function ProfilePage() {
 			setEditingEntry(null);
 			loadProfile();
 		} catch (error) {
+			console.error('Update error:', error);
 			toast.error('Failed to update entry');
 		}
 	};
@@ -101,26 +105,22 @@ export default function ProfilePage() {
 		const file = event.target.files?.[0];
 		if (!file) return;
 
-		const reader = new FileReader();
-		reader.onload = async (e) => {
-			try {
-				const content = e.target?.result as string;
-				const importedData = JSON.parse(content);
+		try {
+			const content = await file.text();
+			const importedData = JSON.parse(content);
 
-				// Basic validation: ensure it has some medical-related fields
-				if (!importedData.demographics && !importedData.medications && !importedData.allergies) {
-					throw new Error('Invalid profile format');
-				}
-
-				await profileApi.update(importedData);
-				toast.success('Profile imported successfully');
-				loadProfile();
-			} catch (error) {
-				console.error('Import error:', error);
-				toast.error(error instanceof Error ? error.message : 'Failed to import profile');
+			// Basic validation: ensure it has some medical-related fields
+			if (!importedData.demographics && !importedData.medications && !importedData.allergies) {
+				throw new Error('Invalid profile format');
 			}
-		};
-		reader.readAsText(file);
+
+			await profileApi.update(importedData);
+			toast.success('Profile imported successfully');
+			loadProfile();
+		} catch (error) {
+			console.error('Import error:', error);
+			toast.error(error instanceof Error ? error.message : 'Failed to import profile');
+		}
 
 		// Reset input
 		if (fileInputRef.current) fileInputRef.current.value = '';
@@ -149,8 +149,10 @@ export default function ProfilePage() {
 			<div className="p-6 space-y-6 max-w-4xl">
 				<div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
 					<div>
-						<h1 className="text-3xl font-bold">Medical Profile</h1>
-						<p className="text-muted-foreground">Last updated: {new Date(profile.updatedAt).toLocaleDateString()}</p>
+						<h1 className="text-3xl font-bold tracking-tight">Medical Profile</h1>
+						<p className="text-sm text-muted-foreground">
+							Last synchronized: {new Date(profile.updatedAt).toLocaleString()}
+						</p>
 					</div>
 					<div className="flex items-center gap-2">
 						<input type="file" ref={fileInputRef} className="hidden" accept=".json" onChange={handleImport} />
@@ -158,29 +160,43 @@ export default function ProfilePage() {
 							variant="outline"
 							size="sm"
 							onClick={() => fileInputRef.current?.click()}
-							className="flex items-center gap-2"
+							className="flex items-center gap-2 hover:bg-accent/50 transition-colors"
 						>
 							<Upload className="h-4 w-4" />
 							Import JSON
 						</Button>
-						<Button variant="outline" size="sm" onClick={handleExport} className="flex items-center gap-2">
+						<Button
+							variant="outline"
+							size="sm"
+							onClick={handleExport}
+							className="flex items-center gap-2 hover:bg-accent/50 transition-colors"
+						>
 							<Download className="h-4 w-4" />
 							Export JSON
 						</Button>
 					</div>
 				</div>
 
-				<Tabs defaultValue="conditions">
-					<TabsList className="grid w-full grid-cols-4 lg:grid-cols-8">
-						<TabsTrigger value="conditions">Conditions</TabsTrigger>
-						<TabsTrigger value="medications">Meds</TabsTrigger>
-						<TabsTrigger value="allergies">Allergies</TabsTrigger>
-						<TabsTrigger value="vitals">Vitals</TabsTrigger>
-						<TabsTrigger value="labs">Labs</TabsTrigger>
-						<TabsTrigger value="surgeries">Surgery</TabsTrigger>
-						<TabsTrigger value="family">Family</TabsTrigger>
-						<TabsTrigger value="lifestyle">Life</TabsTrigger>
-					</TabsList>
+				<DemographicsSection
+					profile={profile}
+					onEdit={(field, item) => setEditingEntry({ field, entry: item })}
+					onDelete={handleDelete}
+				/>
+
+				<Tabs defaultValue="conditions" className="w-full">
+					<ScrollArea className="w-full">
+						<TabsList className="flex w-max lg:w-full bg-muted/30 p-1 mb-4">
+							<TabsTrigger value="conditions" className="px-4 py-2">Conditions</TabsTrigger>
+							<TabsTrigger value="medications" className="px-4 py-2">Meds</TabsTrigger>
+							<TabsTrigger value="allergies" className="px-4 py-2">Allergies</TabsTrigger>
+							<TabsTrigger value="vitals" className="px-4 py-2">Vitals</TabsTrigger>
+							<TabsTrigger value="labs" className="px-4 py-2">Labs</TabsTrigger>
+							<TabsTrigger value="surgeries" className="px-4 py-2">Surgery</TabsTrigger>
+							<TabsTrigger value="family" className="px-4 py-2">Family</TabsTrigger>
+							<TabsTrigger value="lifestyle" className="px-4 py-2">Life</TabsTrigger>
+							<TabsTrigger value="notes" className="px-4 py-2">Notes</TabsTrigger>
+						</TabsList>
+					</ScrollArea>
 
 					<TabsContent value="conditions" className="space-y-4">
 						<ConditionsSection
@@ -231,17 +247,25 @@ export default function ProfilePage() {
 					</TabsContent>
 
 					<TabsContent value="family" className="space-y-4">
-						<FamilySection
+						<FamilyHistorySection
 							profile={profile}
-							onEdit={(field, item) => setEditingEntry({ field, entry: item })}
+							onEdit={(field: string, item: any) => setEditingEntry({ field, entry: item })}
 							onDelete={handleDelete}
 						/>
 					</TabsContent>
 
-					<TabsContent value="lifestyle" className="space-y-4">
+					<TabsContent value="lifestyle" className="space-y-4 focus-visible:outline-none">
 						<LifestyleSection
 							profile={profile}
-							onEdit={(field, item) => setEditingEntry({ field, entry: item })}
+							onEdit={(field: string, item: any) => setEditingEntry({ field, entry: item })}
+							onDelete={handleDelete}
+						/>
+					</TabsContent>
+
+					<TabsContent value="notes" className="space-y-4 focus-visible:outline-none">
+						<NotesSection
+							profile={profile}
+							onEdit={(field: string, item: any) => setEditingEntry({ field, entry: item })}
 							onDelete={handleDelete}
 						/>
 					</TabsContent>
@@ -249,7 +273,7 @@ export default function ProfilePage() {
 			</div>
 
 			<Dialog open={!!editingEntry} onOpenChange={(open) => !open && setEditingEntry(null)}>
-				<DialogContent>
+				<DialogContent className="shadow-none">
 					<DialogHeader>
 						<DialogTitle>Edit Entry</DialogTitle>
 						<DialogDescription>Modify the details of this profile entry.</DialogDescription>
@@ -335,43 +359,43 @@ function EntryCard({
 	severity?: string;
 }>) {
 	return (
-		<div className="group p-3 border rounded-lg bg-card/50 transition-colors hover:bg-card">
+		<div className="group p-4 border border-border/40 rounded-xl bg-card/40 backdrop-blur-md transition-all hover:bg-card/60">
 			<div className="flex items-start justify-between gap-4">
-				<div className="flex-1 space-y-1">
+				<div className="flex-1 space-y-1.5">
 					<div className="flex items-center gap-2 flex-wrap">
-						<p className="font-semibold">{title}</p>
+						<p className="font-bold text-base">{title}</p>
 						<div className="flex items-center gap-1.5">
 							<Badge
 								variant={item.source === 'auto' ? 'secondary' : 'outline'}
-								className="text-[10px] px-1.5 h-4 capitalize"
+								className="text-[10px] px-2 h-4 uppercase tracking-wider font-semibold opacity-70"
 							>
 								{item.source}
 							</Badge>
 							<SeverityBadge severity={severity} />
 						</div>
 					</div>
-					{subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
+					{subtitle && <p className="text-sm text-muted-foreground leading-relaxed">{subtitle}</p>}
 					{item.notes && (
-						<div className="flex gap-1.5 mt-2 text-sm bg-muted/30 p-2 rounded-md border border-muted-foreground/10 italic">
-							<Info className="h-4 w-4 shrink-0 text-muted-foreground/60 mt-0.5" />
-							<p className="text-muted-foreground/80">{item.notes}</p>
+						<div className="flex gap-2 mt-2.5 text-sm bg-accent/30 p-2.5 rounded-lg border border-accent/20 italic">
+							<Info className="h-4 w-4 shrink-0 text-primary/40 mt-0.5" />
+							<p className="text-muted-foreground/80 leading-snug">{item.notes}</p>
 						</div>
 					)}
 					{item.recordedAt && (
-						<div className="flex items-center gap-1.5 mt-2 text-[11px] text-muted-foreground/50">
+						<div className="flex items-center gap-1.5 mt-3 text-[10px] uppercase tracking-widest text-muted-foreground/40 font-medium">
 							<Clock className="h-3 w-3" />
 							<span>
-								Added on {new Date(item.recordedAt).toLocaleDateString()} at{' '}
+								{new Date(item.recordedAt).toLocaleDateString()} •{' '}
 								{new Date(item.recordedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
 							</span>
 						</div>
 					)}
 				</div>
-				<div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity focus-within:opacity-100">
+				<div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity focus-within:opacity-100 shrink-0">
 					<Button
 						variant="ghost"
 						size="icon"
-						className="h-8 w-8 text-muted-foreground hover:text-primary"
+						className="h-8 w-8 rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
 						onClick={() => onEdit(field, item)}
 					>
 						<Edit className="h-4 w-4" />
@@ -379,7 +403,7 @@ function EntryCard({
 					<Button
 						variant="ghost"
 						size="icon"
-						className="h-8 w-8 text-muted-foreground hover:text-destructive"
+						className="h-8 w-8 rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
 						onClick={() => onDelete(field, item.id)}
 					>
 						<Trash2 className="h-4 w-4" />
@@ -390,15 +414,61 @@ function EntryCard({
 	);
 }
 
+function DemographicsSection({
+	profile,
+	onEdit,
+	onDelete,
+}: Readonly<{
+	profile: MedicalProfile;
+	onEdit: (field: string, item: any) => void;
+	onDelete: (field: string, id: string) => void;
+}>) {
+	const demo = profile.demographics || {};
+	const stats = [
+		{ label: 'Date of Birth', value: demo.dateOfBirth, key: 'dateOfBirth' },
+		{ label: 'Sex', value: demo.sex, key: 'sex' },
+		{ label: 'Height', value: demo.height, key: 'height' },
+		{ label: 'Weight', value: demo.weight, key: 'weight' },
+		{ label: 'Blood Type', value: demo.bloodType, key: 'bloodType' },
+	];
+
+	return (
+		<Card className="border-border/40 bg-card/30 backdrop-blur-xl overflow-hidden">
+			<CardHeader className="pb-3 border-b border-border/40">
+				<CardTitle className="flex items-center gap-2 text-xl">
+					<User className="h-5 w-5 text-primary" />
+					Demographics
+				</CardTitle>
+			</CardHeader>
+			<CardContent className="p-0">
+				<div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 divide-x divide-border/40">
+					{stats.map((stat) => (
+						<button
+							key={stat.key}
+							className="group relative p-4 flex flex-col gap-1 hover:bg-accent/20 transition-colors cursor-pointer text-left w-full border-none bg-transparent"
+							onClick={() => onEdit('demographics', { id: stat.key, notes: String(stat.value || '') })}
+						>
+							<p className="text-[10px] uppercase tracking-widest text-muted-foreground/60 font-bold">
+								{stat.label}
+							</p>
+							<p className="font-semibold text-sm truncate">{stat.value || '—'}</p>
+						</button>
+					))}
+				</div>
+			</CardContent>
+		</Card>
+	);
+}
+
 function ConditionsSection({
 	profile,
 	onEdit,
 	onDelete,
-}: {
+}: Readonly<{
 	profile: MedicalProfile;
 	onEdit: (field: string, item: any) => void;
 	onDelete: (field: string, id: string) => void;
-}) {
+}>) {
 	const allConditions = [
 		...(profile.currentConditions || []).map((c) => ({ ...c, _field: 'currentConditions' })),
 		...(profile.persistentConditions || []).map((c) => ({ ...c, _field: 'persistentConditions' })),
@@ -406,10 +476,10 @@ function ConditionsSection({
 	];
 
 	return (
-		<Card>
+		<Card className="border-border/40 bg-card/30 backdrop-blur-xl transition-all">
 			<CardHeader>
 				<CardTitle className="flex items-center gap-2">
-					<Activity className="h-5 w-5" />
+					<Activity className="h-5 w-5 text-primary" />
 					Medical Conditions
 				</CardTitle>
 				<CardDescription>Current and past medical conditions</CardDescription>
@@ -423,8 +493,13 @@ function ConditionsSection({
 							key={condition.id}
 							field={condition._field}
 							item={condition}
-							title={condition.name}
-							subtitle={undefined}
+							title={condition.condition || condition.name || 'Unknown Condition'}
+							subtitle={[
+								condition.diagnosedAt ? `Diagnosed: ${condition.diagnosedAt}` : '',
+								condition.resolvedAt ? `Resolved: ${condition.resolvedAt}` : '',
+							]
+								.filter(Boolean)
+								.join(' • ')}
 							severity={condition.severity}
 							onEdit={onEdit}
 							onDelete={onDelete}
@@ -440,16 +515,16 @@ function MedicationsSection({
 	profile,
 	onEdit,
 	onDelete,
-}: {
+}: Readonly<{
 	profile: MedicalProfile;
 	onEdit: (field: string, item: any) => void;
 	onDelete: (field: string, id: string) => void;
-}) {
+}>) {
 	return (
-		<Card>
+		<Card className="border-border/40 bg-card/30 backdrop-blur-xl transition-all">
 			<CardHeader>
 				<CardTitle className="flex items-center gap-2">
-					<Pill className="h-5 w-5" />
+					<Pill className="h-5 w-5 text-primary" />
 					Medications
 				</CardTitle>
 				<CardDescription>Current medications and dosages</CardDescription>
@@ -464,7 +539,12 @@ function MedicationsSection({
 							field="medications"
 							item={med}
 							title={med.name}
-							subtitle={med.dosage || med.frequency ? `${med.dosage} ${med.frequency}`.trim() : undefined}
+							subtitle={[
+								med.dosage || med.frequency ? `${med.dosage} ${med.frequency}`.trim() : '',
+								med.startedAt ? `Started: ${med.startedAt}` : '',
+							]
+								.filter(Boolean)
+								.join(' • ')}
 							onEdit={onEdit}
 							onDelete={onDelete}
 						/>
@@ -479,16 +559,16 @@ function AllergiesSection({
 	profile,
 	onEdit,
 	onDelete,
-}: {
+}: Readonly<{
 	profile: MedicalProfile;
 	onEdit: (field: string, item: any) => void;
 	onDelete: (field: string, id: string) => void;
-}) {
+}>) {
 	return (
-		<Card>
+		<Card className="border-border/40 bg-card/30 backdrop-blur-xl transition-all">
 			<CardHeader>
 				<CardTitle className="flex items-center gap-2">
-					<AlertTriangle className="h-5 w-5" />
+					<AlertTriangle className="h-5 w-5 text-primary" />
 					Allergies
 				</CardTitle>
 				<CardDescription>Known allergies and reactions</CardDescription>
@@ -519,16 +599,16 @@ function VitalsSection({
 	profile,
 	onEdit,
 	onDelete,
-}: {
+}: Readonly<{
 	profile: MedicalProfile;
 	onEdit: (field: string, item: any) => void;
 	onDelete: (field: string, id: string) => void;
-}) {
+}>) {
 	return (
-		<Card>
+		<Card className="border-border/40 bg-card/30 backdrop-blur-xl transition-all">
 			<CardHeader>
 				<CardTitle className="flex items-center gap-2">
-					<Heart className="h-5 w-5" />
+					<Heart className="h-5 w-5 text-primary" />
 					Vital Signs
 				</CardTitle>
 				<CardDescription>Recorded vital measurements</CardDescription>
@@ -558,16 +638,16 @@ function LabsSection({
 	profile,
 	onEdit,
 	onDelete,
-}: {
+}: Readonly<{
 	profile: MedicalProfile;
 	onEdit: (field: string, item: any) => void;
 	onDelete: (field: string, id: string) => void;
-}) {
+}>) {
 	return (
-		<Card>
+		<Card className="border-border/40 bg-card/30 backdrop-blur-xl transition-all">
 			<CardHeader>
 				<CardTitle className="flex items-center gap-2">
-					<FlaskConical className="h-5 w-5" />
+					<FlaskConical className="h-5 w-5 text-primary" />
 					Lab Results
 				</CardTitle>
 				<CardDescription>Recent laboratory test results</CardDescription>
@@ -582,7 +662,7 @@ function LabsSection({
 							field="labResults"
 							item={lab}
 							title={lab.name}
-							subtitle={`${lab.value} ${lab.unit || ''}${lab.referenceRange ? ` (Ref: ${lab.referenceRange})` : ''}`}
+							subtitle={`${lab.value} ${lab.unit || ''}${lab.referenceRange ? ' (Ref: ' + lab.referenceRange + ')' : ''}`}
 							onEdit={onEdit}
 							onDelete={onDelete}
 						/>
@@ -597,16 +677,16 @@ function SurgeriesSection({
 	profile,
 	onEdit,
 	onDelete,
-}: {
+}: Readonly<{
 	profile: MedicalProfile;
 	onEdit: (field: string, item: any) => void;
 	onDelete: (field: string, id: string) => void;
-}) {
+}>) {
 	return (
-		<Card>
+		<Card className="border-border/40 bg-card/30 backdrop-blur-xl transition-all">
 			<CardHeader>
 				<CardTitle className="flex items-center gap-2">
-					<Scissors className="h-5 w-5" />
+					<Scissors className="h-5 w-5 text-primary" />
 					Surgeries
 				</CardTitle>
 				<CardDescription>Surgical procedures history</CardDescription>
@@ -632,20 +712,20 @@ function SurgeriesSection({
 	);
 }
 
-function FamilySection({
+function FamilyHistorySection({
 	profile,
 	onEdit,
 	onDelete,
-}: {
+}: Readonly<{
 	profile: MedicalProfile;
 	onEdit: (field: string, item: any) => void;
 	onDelete: (field: string, id: string) => void;
-}) {
+}>) {
 	return (
-		<Card>
+		<Card className="border-border/40 bg-card/30 backdrop-blur-xl transition-all">
 			<CardHeader>
 				<CardTitle className="flex items-center gap-2">
-					<Users className="h-5 w-5" />
+					<Users className="h-5 w-5 text-primary" />
 					Family History
 				</CardTitle>
 				<CardDescription>Medical conditions in family members</CardDescription>
@@ -674,18 +754,18 @@ function LifestyleSection({
 	profile,
 	onEdit,
 	onDelete,
-}: {
+}: Readonly<{
 	profile: MedicalProfile;
 	onEdit: (field: string, item: any) => void;
 	onDelete: (field: string, id: string) => void;
-}) {
+}>) {
 	const lifestyle = profile.lifestyle || {};
 
 	return (
-		<Card>
+		<Card className="border-border/40 bg-card/30 backdrop-blur-xl transition-all">
 			<CardHeader>
 				<CardTitle className="flex items-center gap-2">
-					<Leaf className="h-5 w-5" />
+					<Leaf className="h-5 w-5 text-primary" />
 					Lifestyle
 				</CardTitle>
 				<CardDescription>Lifestyle factors and habits</CardDescription>
@@ -697,10 +777,10 @@ function LifestyleSection({
 					Object.entries(lifestyle).map(([key, value]) => (
 						<div
 							key={key}
-							className="group flex items-center justify-between p-3 border rounded-lg bg-card/50 transition-colors hover:bg-card"
+							className="group flex items-center justify-between p-3 border border-border/40 rounded-lg bg-card/50 transition-colors hover:bg-card/80"
 						>
 							<div className="space-y-1">
-								<p className="font-semibold capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</p>
+								<p className="font-semibold capitalize text-sm">{key.replaceAll(/([A-Z])/g, ' $1').trim()}</p>
 								<p className="text-sm text-muted-foreground">
 									{Array.isArray(value) ? value.join(', ') : String(value) || 'Not specified'}
 								</p>
@@ -709,19 +789,17 @@ function LifestyleSection({
 								<Button
 									variant="ghost"
 									size="icon"
-									className="h-8 w-8 text-muted-foreground hover:text-primary"
+									className="h-8 w-8 text-muted-foreground hover:text-primary transition-colors"
 									onClick={() =>
 										onEdit('lifestyle', { id: key, notes: Array.isArray(value) ? value.join('\n') : String(value) })
 									}
 								>
 									<Edit className="h-4 w-4" />
 								</Button>
-								{/* Delete for lifestyle might mean clear or delete key, but usually lifestyle keys are fixed in schema. 
-                    We'll allow delete which will clear it. */}
 								<Button
 									variant="ghost"
 									size="icon"
-									className="h-8 w-8 text-muted-foreground hover:text-destructive"
+									className="h-8 w-8 text-muted-foreground hover:text-destructive transition-colors"
 									onClick={() => onDelete('lifestyle', key)}
 								>
 									<Trash2 className="h-4 w-4" />
@@ -730,6 +808,53 @@ function LifestyleSection({
 						</div>
 					))
 				)}
+			</CardContent>
+		</Card>
+	);
+}
+
+function NotesSection({
+	profile,
+	onEdit,
+	onDelete,
+}: Readonly<{
+	profile: MedicalProfile;
+	onEdit: (field: string, item: any) => void;
+	onDelete: (field: string, id: string) => void;
+}>) {
+	return (
+		<Card className="border-border/40 bg-card/30 backdrop-blur-xl transition-all">
+			<CardHeader>
+				<CardTitle className="flex items-center gap-2">
+					<FileText className="h-5 w-5 text-primary" />
+					General Notes
+				</CardTitle>
+				<CardDescription>Overall clinical observations and free-text notes</CardDescription>
+			</CardHeader>
+			<CardContent>
+				<button 
+					className="group relative p-6 border border-dashed border-border/60 rounded-xl bg-accent/5 hover:bg-accent/10 transition-all cursor-pointer min-h-[200px] text-left w-full"
+					onClick={() => onEdit('freeNotes', { id: 'text', notes: profile.freeNotes || '' })}
+				>
+					{profile.freeNotes ? (
+						<p className="whitespace-pre-wrap leading-relaxed text-muted-foreground italic">
+							{profile.freeNotes}
+						</p>
+					) : (
+						<div className="h-full flex flex-col items-center justify-center gap-2 py-8">
+							<div className="flex flex-col items-center justify-center gap-2 text-muted-foreground/40">
+								<Info className="h-8 w-8" />
+								<p className="italic text-sm">No general notes recorded</p>
+							</div>
+						</div>
+					)}
+					<div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+						<div className="flex items-center h-8 gap-2 px-3 py-1 bg-background border border-border/40 rounded-full text-xs font-medium shadow-sm">
+							<Edit className="h-3.5 w-3.5" />
+							Edit Notes
+						</div>
+					</div>
+				</button>
 			</CardContent>
 		</Card>
 	);

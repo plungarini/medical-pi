@@ -9,6 +9,7 @@ import { createMessage, getRecentMessages } from '../../services/chatService.js'
 import { getProfile, breathe } from '../../services/profileService.js';
 import { createSession } from '../../services/sessionService.js';
 import { generateAndSave } from '../../services/titleService.js';
+import { saveMemory } from '../../services/memoryService.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SYSTEM_PROMPT = fs.readFileSync(path.join(__dirname, '../../../../prompts/system.txt'), 'utf-8');
@@ -130,6 +131,21 @@ export default async function chatRoutes(fastify: FastifyInstance) {
 			return;
 		}
 
+		const body = request.body as { messages: FrontendMessage[] };
+		if (!body?.messages || body.messages.length === 0) {
+			reply.status(400).send({ error: 'No messages found' });
+			return;
+		}
+
+		const userMessage = extractUserMessage(body.messages);
+		if (!userMessage) {
+			reply.status(400).send({ error: 'No user message content found' });
+			return;
+		}
+
+		// Intercept and send to memory-pi (fire-and-forget) - MOVE TO ABSOLUTE BEGINNING
+		void saveMemory(request.user.userId, 'pending', userMessage);
+
 		// Determine session ID
 		let sessionId = request.headers['x-session-id'] as string;
 
@@ -143,18 +159,6 @@ export default async function chatRoutes(fastify: FastifyInstance) {
 				reply.status(500).send({ error: 'Failed to create session' });
 				return;
 			}
-		}
-
-		const body = request.body as { messages: FrontendMessage[] };
-		if (!body?.messages || body.messages.length === 0) {
-			reply.status(400).send({ error: 'No messages found' });
-			return;
-		}
-
-		const userMessage = extractUserMessage(body.messages);
-		if (!userMessage) {
-			reply.status(400).send({ error: 'No user message content found' });
-			return;
 		}
 
 		// Persist user message
