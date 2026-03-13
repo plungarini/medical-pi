@@ -88,5 +88,5 @@
     "typecheck:ui": "cd ui && npm run typecheck 2>/dev/null || echo 'No typecheck in UI'"
   },
   "type": "module",
-  "version": "1.6.1"
+  "version": "1.6.2"
 }
